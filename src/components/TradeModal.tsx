@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Decimal from 'decimal.js';
-import { MagnifyingGlass, Plus, SlidersHorizontal, X } from '@phosphor-icons/react';
+import { MagnifyingGlass, Plus, X } from '@phosphor-icons/react';
 import {
   calculateFeeDetail,
   calculateShortDayTradeBreakeven,
@@ -88,10 +88,9 @@ export function TradeModal({
   const [tradeTime, setTradeTime] = useState<string>('');
   const [lotsOrShares, setLotsOrShares] = useState<string>('1');
   const [price, setPrice] = useState<string>('');
-  const [allowDayTrade, setAllowDayTrade] = useState<boolean>(true);
+  const [allowDayTrade, setAllowDayTrade] = useState<boolean>(false);
   const [pendingDayTrade, setPendingDayTrade] = useState<boolean>(false);
   const [dayTradeGroupId, setDayTradeGroupId] = useState<string | null>(null);
-  const [showOverride, setShowOverride] = useState<boolean>(false);
   const [feeOverride, setFeeOverride] = useState<string>('');
   const [taxOverride, setTaxOverride] = useState<string>('');
   const [note, setNote] = useState<string>('');
@@ -101,6 +100,9 @@ export function TradeModal({
   const [pairSellPrice, setPairSellPrice] = useState<string>('');
   const [pairBuyPrice, setPairBuyPrice] = useState<string>('');
   const [pairAsDayTrade, setPairAsDayTrade] = useState<boolean>(true);
+  const [pairSellFeeOverride, setPairSellFeeOverride] = useState<string>('');
+  const [pairBuyFeeOverride, setPairBuyFeeOverride] = useState<string>('');
+  const [pairTaxOverride, setPairTaxOverride] = useState<string>('');
   const [pairNote, setPairNote] = useState<string>('');
 
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -132,8 +134,6 @@ export function TradeModal({
       setAllowDayTrade(editing.allowDayTrade);
       setPendingDayTrade(Boolean(editing.pendingDayTrade));
       setDayTradeGroupId(editing.dayTradeGroupId ?? null);
-      const hasOv = editing.feeOverride != null || editing.taxOverride != null;
-      setShowOverride(hasOv);
       setFeeOverride(editing.feeOverride != null ? String(editing.feeOverride) : '');
       setTaxOverride(editing.taxOverride != null ? String(editing.taxOverride) : '');
       setNote(editing.note ?? '');
@@ -155,7 +155,6 @@ export function TradeModal({
       setAllowDayTrade(true);
       setPendingDayTrade(false);
       setDayTradeGroupId(cover.dayTradeGroupId ?? null);
-      setShowOverride(false);
       setFeeOverride('');
       setTaxOverride('');
       setNote('先賣後買回補');
@@ -179,10 +178,9 @@ export function TradeModal({
     setTradeTime('');
     setLotsOrShares('1');
     setPrice('');
-    setAllowDayTrade(true);
+    setAllowDayTrade(false);
     setPendingDayTrade(false);
     setDayTradeGroupId(null);
-    setShowOverride(false);
     setFeeOverride('');
     setTaxOverride('');
     setNote('');
@@ -191,6 +189,9 @@ export function TradeModal({
     setPairSellPrice('');
     setPairBuyPrice('');
     setPairAsDayTrade(true);
+    setPairSellFeeOverride('');
+    setPairBuyFeeOverride('');
+    setPairTaxOverride('');
     setPairNote('');
   }, [isOpen, initialState, accounts, securities, today]);
 
@@ -248,6 +249,17 @@ export function TradeModal({
     const isDayTradeEstimate =
       tradeType === 'LOT' && allowDayTrade && side === 'SELL' && pendingDayTrade;
 
+    const autoFee = calculateFeeDetail(p, singleShares, selectedAccount, tradeType, null).feeUsed;
+    const autoTax = calculateTax(
+      p,
+      singleShares,
+      selectedSecurity.assetType,
+      isDayTradeEstimate,
+      side,
+      selectedSecurity.taxRateOverride,
+      null,
+    );
+
     const feeDetail = calculateFeeDetail(
       p,
       singleShares,
@@ -268,7 +280,15 @@ export function TradeModal({
     const netSettlement =
       side === 'BUY' ? -(gross + feeDetail.feeUsed) : gross - feeDetail.feeUsed - tax;
 
-    return { gross, fee: feeDetail.feeUsed, tax, netSettlement, isDayTradeEstimate };
+    return {
+      gross,
+      fee: feeDetail.feeUsed,
+      tax,
+      autoFee,
+      autoTax,
+      netSettlement,
+      isDayTradeEstimate,
+    };
   }, [
     price,
     selectedAccount,
@@ -303,18 +323,41 @@ export function TradeModal({
       taxRateOverride: selectedSecurity.taxRateOverride,
     });
 
+    const parsedSellFee =
+      pairSellFeeOverride.trim() !== ''
+        ? Math.max(0, Math.floor(Number(pairSellFeeOverride)))
+        : breakeven.sellFee;
+    const parsedTax =
+      pairTaxOverride.trim() !== ''
+        ? Math.max(0, Math.floor(Number(pairTaxOverride)))
+        : breakeven.sellTax;
+    const effectiveSellNet = breakeven.sellGross - parsedSellFee - parsedTax;
+
     if (!Number.isFinite(bp) || bp <= 0) {
-      return { breakeven, complete: null };
+      return {
+        breakeven,
+        effectiveSellFee: parsedSellFee,
+        effectiveTax: parsedTax,
+        autoBuyFee: null as number | null,
+        complete: null,
+      };
     }
 
     const buyGross = new Decimal(bp).mul(pairShares).round().toNumber();
-    const buyFee = calculateFeeDetail(bp, pairShares, selectedAccount, 'LOT').feeUsed;
+    const autoBuyFee = calculateFeeDetail(bp, pairShares, selectedAccount, 'LOT').feeUsed;
+    const buyFee =
+      pairBuyFeeOverride.trim() !== ''
+        ? Math.max(0, Math.floor(Number(pairBuyFeeOverride)))
+        : autoBuyFee;
     const buyTotal = buyGross + buyFee;
-    const netPnl = breakeven.sellNet - buyTotal;
+    const netPnl = effectiveSellNet - buyTotal;
     const returnPct = buyTotal > 0 ? (netPnl / buyTotal) * 100 : 0;
 
     return {
       breakeven,
+      effectiveSellFee: parsedSellFee,
+      effectiveTax: parsedTax,
+      autoBuyFee,
       complete: {
         buyGross,
         buyFee,
@@ -323,7 +366,17 @@ export function TradeModal({
         returnPct,
       },
     };
-  }, [pairSellPrice, pairBuyPrice, selectedAccount, pairShares, selectedSecurity, pairAsDayTrade]);
+  }, [
+    pairSellPrice,
+    pairBuyPrice,
+    selectedAccount,
+    pairShares,
+    selectedSecurity,
+    pairAsDayTrade,
+    pairSellFeeOverride,
+    pairBuyFeeOverride,
+    pairTaxOverride,
+  ]);
 
   if (!isOpen) return null;
 
@@ -450,6 +503,16 @@ export function TradeModal({
     const shares = lots * 1000;
     const groupId = generateId('dtgrp');
     const nowIso = new Date().toISOString();
+    const parsedSellFee =
+      pairSellFeeOverride.trim() !== ''
+        ? Math.max(0, Math.floor(Number(pairSellFeeOverride)))
+        : null;
+    const parsedBuyFee =
+      pairBuyFeeOverride.trim() !== ''
+        ? Math.max(0, Math.floor(Number(pairBuyFeeOverride)))
+        : null;
+    const parsedTax =
+      pairTaxOverride.trim() !== '' ? Math.max(0, Math.floor(Number(pairTaxOverride))) : null;
 
     const sellTx: Transaction = {
       id: generateId('tx-sell'),
@@ -464,6 +527,8 @@ export function TradeModal({
       allowDayTrade: pairAsDayTrade,
       dayTradeGroupId: pairAsDayTrade ? groupId : null,
       pendingDayTrade: false,
+      feeOverride: parsedSellFee,
+      taxOverride: parsedTax,
       note: pairNote.trim() || (pairAsDayTrade ? '先賣後買當沖' : '先賣舊股再買回'),
       createdAt: nowIso,
     };
@@ -481,6 +546,7 @@ export function TradeModal({
       allowDayTrade: pairAsDayTrade,
       dayTradeGroupId: pairAsDayTrade ? groupId : null,
       pendingDayTrade: false,
+      feeOverride: parsedBuyFee,
       note: pairNote.trim() || (pairAsDayTrade ? '先賣後買回補' : '賣舊後買進新倉'),
       createdAt: nowIso,
     };
@@ -710,7 +776,10 @@ export function TradeModal({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setSide('BUY')}
+                      onClick={() => {
+                        setSide('BUY');
+                        setTaxOverride('');
+                      }}
                       className={`py-2.5 rounded-lg text-sm font-semibold border transition-colors ${
                         side === 'BUY'
                           ? 'bg-rose-500/20 text-rose-300 border-rose-500/50'
@@ -823,6 +892,43 @@ export function TradeModal({
                 </label>
               </div>
 
+              {/* 手續費與稅金欄位（留空依券商折數自動計算） */}
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-300">手續費 (元)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={feeOverride}
+                    onChange={(e) => setFeeOverride(e.target.value)}
+                    placeholder={
+                      singlePreview ? `自動試算：${singlePreview.autoFee}` : '留空自動計算'
+                    }
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-mono tabular-nums text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-300">稅金 / 證交稅 (元)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    disabled={side === 'BUY'}
+                    value={side === 'BUY' ? '' : taxOverride}
+                    onChange={(e) => setTaxOverride(e.target.value)}
+                    placeholder={
+                      side === 'BUY'
+                        ? '0 (買進免稅)'
+                        : singlePreview
+                          ? `自動試算：${singlePreview.autoTax}`
+                          : '留空自動計算'
+                    }
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-mono tabular-nums text-slate-100 disabled:opacity-50 focus:outline-none focus:border-sky-500"
+                  />
+                </label>
+              </div>
+
               {/* 當沖 / 賣舊買新選項 */}
               <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-2.5">
                 {tradeType === 'LOT' ? (
@@ -839,10 +945,10 @@ export function TradeModal({
                       />
                       <span className="text-xs leading-relaxed text-slate-200">
                         <span className="font-semibold text-amber-300">
-                          允許同日現股當沖沖銷（預設）
+                          允許同日現股當沖沖銷
                         </span>
                         <span className="block text-slate-400">
-                          勾選：若同日有相反方向整股交易，優先配對沖銷當沖（不改原庫存均價、普通股稅 0.15%）。取消勾選：強制走「賣舊買新」（沖減庫存、普通股稅 0.3%）。
+                          未勾選（預設）：走一般買賣／賣舊買新（沖減庫存、普通股稅 0.3%）。勾選：若同日有相反方向整股交易，優先配對沖銷當沖（不改原庫存均價、普通股稅 0.15%）。
                         </span>
                       </span>
                     </label>
@@ -869,46 +975,6 @@ export function TradeModal({
                 ) : (
                   <div className="text-xs text-slate-400">
                     台股盤中零股不適用現股當沖減稅，若同日有買賣將依「賣舊買新」沖減庫存並計入一般證交稅。
-                  </div>
-                )}
-              </div>
-
-              {/* 對帳微調 */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowOverride((prev) => !prev)}
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200"
-                >
-                  <SlidersHorizontal size={14} aria-hidden="true" />
-                  <span>{showOverride ? '隱藏對帳金額微調' : '展開對帳金額微調 (選填)'}</span>
-                </button>
-                {showOverride && (
-                  <div className="mt-2.5 grid grid-cols-2 gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-                    <label className="block space-y-1">
-                      <span className="text-xs text-slate-400">手動覆寫手續費 (元)</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={feeOverride}
-                        onChange={(e) => setFeeOverride(e.target.value)}
-                        placeholder="留空自動計算"
-                        className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-sm font-mono text-slate-100"
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-xs text-slate-400">手動覆寫證交稅 (元)</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={taxOverride}
-                        onChange={(e) => setTaxOverride(e.target.value)}
-                        placeholder="留空自動計算"
-                        className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-sm font-mono text-slate-100"
-                      />
-                    </label>
                   </div>
                 )}
               </div>
@@ -1035,6 +1101,55 @@ export function TradeModal({
                 </label>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-300">賣出手續費 (元)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={pairSellFeeOverride}
+                    onChange={(e) => setPairSellFeeOverride(e.target.value)}
+                    placeholder={
+                      pairPreview ? `自動：${pairPreview.breakeven.sellFee}` : '留空自動計算'
+                    }
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-mono tabular-nums text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </label>
+
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-300">買回手續費 (元)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={pairBuyFeeOverride}
+                    onChange={(e) => setPairBuyFeeOverride(e.target.value)}
+                    placeholder={
+                      pairPreview?.autoBuyFee != null
+                        ? `自動：${pairPreview.autoBuyFee}`
+                        : '留空自動計算'
+                    }
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-mono tabular-nums text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </label>
+
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-300">稅金 / 證交稅 (元)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={pairTaxOverride}
+                    onChange={(e) => setPairTaxOverride(e.target.value)}
+                    placeholder={
+                      pairPreview ? `自動：${pairPreview.breakeven.sellTax}` : '留空自動計算'
+                    }
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-mono tabular-nums text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </label>
+              </div>
+
               <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5">
                 <label className="flex items-start gap-2.5 cursor-pointer">
                   <input
@@ -1075,8 +1190,8 @@ export function TradeModal({
                       </span>
                     </span>
                     <span className="text-slate-400 font-mono">
-                      賣出費 {pairPreview.breakeven.sellFee} · 證交稅{' '}
-                      {pairPreview.breakeven.sellTax}
+                      賣出費 {pairPreview.effectiveSellFee} · 證交稅{' '}
+                      {pairPreview.effectiveTax}
                     </span>
                   </div>
 
@@ -1086,8 +1201,8 @@ export function TradeModal({
                         <div className="text-slate-400 font-sans">雙邊總費用+稅</div>
                         <div className="mt-0.5 text-sm font-semibold text-slate-200">
                           {formatTwd(
-                            pairPreview.breakeven.sellFee +
-                              pairPreview.breakeven.sellTax +
+                            pairPreview.effectiveSellFee +
+                              pairPreview.effectiveTax +
                               pairPreview.complete.buyFee,
                           )}
                         </div>

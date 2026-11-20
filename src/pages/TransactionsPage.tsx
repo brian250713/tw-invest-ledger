@@ -170,7 +170,8 @@ export function TransactionsPage({
                     <th className="px-4 py-3 text-left font-medium">帳務屬性</th>
                     <th className="px-4 py-3 text-right font-medium">股數</th>
                     <th className="px-4 py-3 text-right font-medium">單價</th>
-                    <th className="px-4 py-3 text-right font-medium">費 / 稅</th>
+                    <th className="px-4 py-3 text-right font-medium">手續費</th>
+                    <th className="px-4 py-3 text-right font-medium">稅金</th>
                     <th className="px-4 py-3 text-right font-medium">交割淨額</th>
                     <th className="px-4 py-3 text-right font-medium">操作</th>
                   </tr>
@@ -226,9 +227,23 @@ export function TransactionsPage({
                         <td className="px-4 py-3 text-right text-slate-200">
                           {formatPrice(tx.price)}
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-400 whitespace-nowrap">
-                          <div>費 {item.fee}</div>
-                          {tx.side === 'SELL' && <div>稅 {item.tax}</div>}
+                        <td className="px-4 py-3 text-right text-slate-300 whitespace-nowrap">
+                          <span>{formatTwd(item.fee)}</span>
+                          {tx.feeOverride != null && (
+                            <span className="ml-1 text-[10px] text-amber-400 font-sans">覆</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-300 whitespace-nowrap">
+                          {tx.side === 'SELL' ? (
+                            <>
+                              <span>{formatTwd(item.tax)}</span>
+                              {tx.taxOverride != null && (
+                                <span className="ml-1 text-[10px] text-amber-400 font-sans">覆</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )}
                         </td>
                         <td
                           className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${
@@ -306,7 +321,8 @@ export function TransactionsPage({
                     <th className="px-4 py-3 text-right font-medium">股數</th>
                     <th className="px-4 py-3 text-right font-medium">賣出均價</th>
                     <th className="px-4 py-3 text-right font-medium">買進均價</th>
-                    <th className="px-4 py-3 text-right font-medium">雙邊費稅</th>
+                    <th className="px-4 py-3 text-right font-medium">手續費</th>
+                    <th className="px-4 py-3 text-right font-medium">稅金</th>
                     <th className="px-4 py-3 text-right font-medium">淨損益</th>
                     <th className="px-4 py-3 text-right font-medium">報酬率</th>
                   </tr>
@@ -340,8 +356,14 @@ export function TransactionsPage({
                       <td className="px-4 py-3 text-right text-slate-200">
                         {formatPrice(m.buyPrice)}
                       </td>
-                      <td className="px-4 py-3 text-right text-slate-400">
-                        {formatTwd(m.buyFee + m.sellFee + m.sellTax)}
+                      <td className="px-4 py-3 text-right text-slate-300 whitespace-nowrap">
+                        <div>{formatTwd(m.buyFee + m.sellFee)}</div>
+                        <div className="text-[10px] text-slate-500">
+                          買 {m.buyFee} / 賣 {m.sellFee}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-300 whitespace-nowrap">
+                        {formatTwd(m.sellTax)}
                       </td>
                       <td
                         className={`px-4 py-3 text-right font-semibold ${pnlColorClass(m.netPnl)}`}
@@ -375,7 +397,8 @@ export function TransactionsPage({
                     <th className="px-4 py-3 text-right font-medium">股數</th>
                     <th className="px-4 py-3 text-right font-medium">賣出價</th>
                     <th className="px-4 py-3 text-right font-medium">移動均價</th>
-                    <th className="px-4 py-3 text-right font-medium">費 / 稅</th>
+                    <th className="px-4 py-3 text-right font-medium">手續費</th>
+                    <th className="px-4 py-3 text-right font-medium">稅金</th>
                     <th className="px-4 py-3 text-right font-medium">已實現損益</th>
                     <th className="px-4 py-3 text-right font-medium">報酬率</th>
                   </tr>
@@ -400,8 +423,11 @@ export function TransactionsPage({
                       <td className="px-4 py-3 text-right text-slate-300">
                         {formatPrice(r.avgCost)}
                       </td>
-                      <td className="px-4 py-3 text-right text-slate-400">
-                        {formatTwd(r.sellFee + r.sellTax)}
+                      <td className="px-4 py-3 text-right text-slate-300 whitespace-nowrap">
+                        {formatTwd(r.sellFee)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-300 whitespace-nowrap">
+                        {formatTwd(r.sellTax)}
                       </td>
                       <td
                         className={`px-4 py-3 text-right font-semibold ${pnlColorClass(

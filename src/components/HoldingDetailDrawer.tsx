@@ -181,6 +181,10 @@ export function HoldingDetailDrawer({
                 <div className="text-slate-300 mt-1 font-mono">
                   {formatShares(item.tx.shares)} @ {formatPrice(item.tx.price)}
                 </div>
+                <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                  手續費 {formatTwd(item.fee)}
+                  {item.tx.side === 'SELL' ? ` · 稅金 ${formatTwd(item.tax)}` : ''}
+                </div>
               </div>
               <div className="text-right font-mono tabular-nums">
                 <div
