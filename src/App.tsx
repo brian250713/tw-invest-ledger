@@ -13,7 +13,7 @@ import {
   writeBackupToHandle,
   type SavedFileHandleState,
 } from '@/db/fileSync';
-import { db, ensureInitialData } from '@/db/schema';
+import { db, DEFAULT_ACCOUNT_META_KEY, ensureInitialData, resolveDefaultAccountId } from '@/db/schema';
 import { buildLedgerAnalytics } from '@/engine/analytics';
 import { replayLedger } from '@/engine/replay';
 import { computePortfolioXirr } from '@/engine/xirr';
@@ -69,6 +69,10 @@ export function App() {
   const lastModifiedAt = metaMap.get('lastModifiedAt') ?? null;
   const lastBackupAt = metaMap.get('lastBackupAt') ?? null;
   const lastQuoteSyncAt = metaMap.get('lastQuoteSyncAt') ?? null;
+  const defaultAccountId = useMemo(
+    () => resolveDefaultAccountId(accounts, metaMap.get(DEFAULT_ACCOUNT_META_KEY)),
+    [accounts, metaMap],
+  );
 
   // 若已綁定本機檔案且具寫入權限，資料異動後 debounce 800ms 自動同步寫入硬碟
   useEffect(() => {
@@ -263,6 +267,7 @@ export function App() {
             analytics={analytics}
             xirr={xirr}
             accounts={accounts}
+            defaultAccountId={defaultAccountId}
             securities={securities}
             hasTransactions={transactions.length > 0}
             onOpenNewTrade={(mode) => handleOpenNewTrade(mode)}
@@ -307,6 +312,7 @@ export function App() {
         {activeTab === 'settings' && (
           <SettingsPage
             accounts={accounts}
+            defaultAccountId={defaultAccountId}
             securities={securities}
             summary={summary}
             lastModifiedAt={lastModifiedAt}
@@ -324,6 +330,7 @@ export function App() {
         isOpen={modalState !== null}
         initialState={modalState}
         accounts={accounts}
+        defaultAccountId={defaultAccountId}
         securities={securities}
         onClose={() => setModalState(null)}
       />
@@ -332,6 +339,7 @@ export function App() {
         isOpen={dividendModalOpen}
         editingDividend={editingDividend}
         accounts={accounts}
+        defaultAccountId={defaultAccountId}
         securities={securities}
         holdings={summary.holdings}
         onClose={() => setDividendModalOpen(false)}

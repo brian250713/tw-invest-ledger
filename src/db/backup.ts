@@ -6,12 +6,13 @@ import type {
   Security,
   Transaction,
 } from '@/engine/types';
-import { db, DEFAULT_ACCOUNT_ID, touchLastModified } from './schema';
+import { db, DEFAULT_ACCOUNT_ID, DEFAULT_ACCOUNT_META_KEY, touchLastModified } from './schema';
 
 export interface LedgerBackupFile {
   schemaVersion: 1 | 2;
   app: 'tw-invest-ledger';
   exportedAt: string;
+  defaultAccountId?: string | null;
   accounts: Account[];
   securities: Security[];
   transactions: Transaction[];
@@ -19,16 +20,18 @@ export interface LedgerBackupFile {
 }
 
 export async function buildBackupPayload(): Promise<LedgerBackupFile> {
-  const [accounts, securities, transactions, dividends] = await Promise.all([
+  const [accounts, securities, transactions, dividends, defaultAccMeta] = await Promise.all([
     db.accounts.toArray(),
     db.securities.toArray(),
     db.transactions.toArray(),
     db.dividends.toArray(),
+    db.appMeta.get(DEFAULT_ACCOUNT_META_KEY),
   ]);
   return {
     schemaVersion: 2,
     app: 'tw-invest-ledger',
     exportedAt: new Date().toISOString(),
+    defaultAccountId: defaultAccMeta?.value ?? accounts[0]?.id ?? null,
     accounts,
     securities,
     transactions,
@@ -81,6 +84,10 @@ export function parseAndValidateBackup(rawText: string): LedgerBackupFile {
 
   return {
     ...(obj as LedgerBackupFile),
+    defaultAccountId:
+      typeof obj.defaultAccountId === 'string' && obj.defaultAccountId.trim() !== ''
+        ? obj.defaultAccountId
+        : null,
     dividends: Array.isArray(obj.dividends) ? obj.dividends : [],
   };
 }
@@ -102,6 +109,12 @@ export async function restoreBackupJson(backup: LedgerBackupFile): Promise<void>
       if (backup.dividends && backup.dividends.length > 0) {
         await db.dividends.bulkPut(backup.dividends);
       }
+      const restoredDefaultId =
+        backup.defaultAccountId &&
+        backup.accounts.some((a) => a.id === backup.defaultAccountId)
+          ? backup.defaultAccountId
+          : backup.accounts[0].id;
+      await db.appMeta.put({ key: DEFAULT_ACCOUNT_META_KEY, value: restoredDefaultId });
       await db.appMeta.put({ key: 'lastBackupAt', value: new Date().toISOString() });
       await touchLastModified();
     },
@@ -126,6 +139,7 @@ export async function clearAllUserData(): Promise<void> {
         rebateMode: 'DAILY',
         createdAt: new Date().toISOString(),
       });
+      await db.appMeta.put({ key: DEFAULT_ACCOUNT_META_KEY, value: DEFAULT_ACCOUNT_ID });
       await db.securities.clear();
       await db.securities.bulkPut(defaultSecuritiesData as Security[]);
       await touchLastModified();
@@ -435,6 +449,7 @@ export async function loadDemoData(): Promise<void> {
       await db.transactions.bulkPut(demoTransactions);
       await db.dividends.bulkPut(demoDividends);
       await db.priceQuotes.bulkPut(demoQuotes);
+      await db.appMeta.put({ key: DEFAULT_ACCOUNT_META_KEY, value: DEFAULT_ACCOUNT_ID });
       await db.appMeta.put({ key: 'lastQuoteSyncAt', value: nowIso });
       await touchLastModified();
     },

@@ -1,12 +1,15 @@
 import { useRef, useState } from 'react';
 import {
+  Check,
   CheckCircle,
   DownloadSimple,
   FileCsv,
   FloppyDiskBack,
   LinkBreak,
+  PencilSimple,
   Plus,
   Sparkle,
+  Star,
   Trash,
   UploadSimple,
   WarningCircle,
@@ -27,7 +30,12 @@ import {
   type CsvParseTransactionsResult,
 } from '@/db/csv';
 import { isFileSystemSyncSupported, type SavedFileHandleState } from '@/db/fileSync';
-import { deleteAccount, upsertAccount, upsertSecurity } from '@/db/schema';
+import {
+  deleteAccount,
+  setDefaultAccountId,
+  upsertAccount,
+  upsertSecurity,
+} from '@/db/schema';
 import type {
   Account,
   AssetType,
@@ -40,6 +48,7 @@ import { assetTypeLabel, formatDiscount } from '@/lib/format';
 
 interface SettingsPageProps {
   accounts: Account[];
+  defaultAccountId: string;
   securities: Security[];
   summary: LedgerSummary;
   lastModifiedAt?: string | null;
@@ -53,6 +62,7 @@ interface SettingsPageProps {
 
 export function SettingsPage({
   accounts,
+  defaultAccountId,
   securities,
   summary,
   lastModifiedAt,
@@ -70,11 +80,13 @@ export function SettingsPage({
   const fsSupported = isFileSystemSyncSupported();
 
   // 新增/編輯券商
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [accName, setAccName] = useState('');
   const [accDiscountZhe, setAccDiscountZhe] = useState('2.8');
   const [accMinLot, setAccMinLot] = useState('20');
   const [accMinOdd, setAccMinOdd] = useState('1');
   const [accRebateMode, setAccRebateMode] = useState<RebateMode>('DAILY');
+  const [accSetAsDefault, setAccSetAsDefault] = useState(false);
 
   // 新增標的
   const [secSymbol, setSecSymbol] = useState('');
@@ -85,7 +97,38 @@ export function SettingsPage({
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
 
-  const handleAddAccount = async (e: React.FormEvent) => {
+  const resetAccountForm = () => {
+    setEditingAccountId(null);
+    setAccName('');
+    setAccDiscountZhe('2.8');
+    setAccMinLot('20');
+    setAccMinOdd('1');
+    setAccRebateMode('DAILY');
+    setAccSetAsDefault(false);
+  };
+
+  const handleStartEditAccount = (acc: Account) => {
+    setStatusMsg(null);
+    setEditingAccountId(acc.id);
+    setAccName(acc.name);
+    setAccDiscountZhe(String(Number((acc.feeDiscount * 10).toFixed(2))));
+    setAccMinLot(String(acc.minFeeLot));
+    setAccMinOdd(String(acc.minFeeOdd));
+    setAccRebateMode(acc.rebateMode);
+    setAccSetAsDefault(acc.id === defaultAccountId);
+  };
+
+  const handleSetDefaultAccount = async (acc: Account) => {
+    setStatusMsg(null);
+    const ok = await setDefaultAccountId(acc.id);
+    if (ok) {
+      setStatusMsg({ type: 'ok', text: `已將「${acc.name}」設為預設券商` });
+    } else {
+      setStatusMsg({ type: 'err', text: '找不到指定券商，無法設為預設' });
+    }
+  };
+
+  const handleSubmitAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMsg(null);
     const zhe = Number(accDiscountZhe);
@@ -97,18 +140,36 @@ export function SettingsPage({
       setStatusMsg({ type: 'err', text: '手續費折數請填 0.1 ~ 10（例如 2.8 代表 2.8 折，無折讓填 10）' });
       return;
     }
-    const newAcc: Account = {
-      id: `acc-${Date.now()}`,
+    const minLotRaw = accMinLot.trim() === '' ? 20 : Number(accMinLot);
+    const minOddRaw = accMinOdd.trim() === '' ? 1 : Number(accMinOdd);
+    if (!Number.isFinite(minLotRaw) || minLotRaw < 0 || !Number.isFinite(minOddRaw) || minOddRaw < 0) {
+      setStatusMsg({ type: 'err', text: '最低手續費須為大於或等於 0 的數字' });
+      return;
+    }
+
+    const existing = editingAccountId
+      ? accounts.find((a) => a.id === editingAccountId)
+      : undefined;
+
+    const accPayload: Account = {
+      id: existing?.id ?? `acc-${Date.now()}`,
       name: accName.trim(),
       feeDiscount: Number((zhe / 10).toFixed(4)),
-      minFeeLot: Math.max(0, Math.floor(Number(accMinLot) || 20)),
-      minFeeOdd: Math.max(0, Math.floor(Number(accMinOdd) || 1)),
+      minFeeLot: Math.floor(minLotRaw),
+      minFeeOdd: Math.floor(minOddRaw),
       rebateMode: accRebateMode,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
     };
-    await upsertAccount(newAcc);
-    setAccName('');
-    setStatusMsg({ type: 'ok', text: `已新增券商「${newAcc.name}」` });
+
+    const shouldSetDefault = accSetAsDefault && accPayload.id !== defaultAccountId;
+    await upsertAccount(accPayload, { setAsDefault: shouldSetDefault });
+    resetAccountForm();
+    setStatusMsg({
+      type: 'ok',
+      text: `${existing ? '已更新' : '已新增'}券商「${accPayload.name}」${
+        shouldSetDefault ? '並設為預設券商' : ''
+      }`,
+    });
   };
 
   const handleDeleteAccount = async (id: string) => {
@@ -116,6 +177,9 @@ export function SettingsPage({
     if (!res.ok) {
       setStatusMsg({ type: 'err', text: res.reason ?? '無法刪除帳戶' });
     } else {
+      if (editingAccountId === id) {
+        resetAccountForm();
+      }
       setStatusMsg({ type: 'ok', text: '已刪除券商帳戶' });
     }
   };
@@ -182,7 +246,7 @@ export function SettingsPage({
     setStatusMsg(null);
     try {
       const text = await file.text();
-      const parsed = parseTransactionsCsv(text, accounts, securities);
+      const parsed = parseTransactionsCsv(text, accounts, securities, defaultAccountId);
       setCsvFileName(file.name);
       setCsvPreview(parsed);
     } catch (err) {
@@ -517,101 +581,181 @@ export function SettingsPage({
       {/* 多券商帳戶管理 */}
       <section className="rounded-xl border border-slate-800 bg-[#0B1120] p-5 space-y-4">
         <div>
-          <h3 className="text-base font-semibold text-slate-100">券商帳戶與手續費折數</h3>
+          <h3 className="text-base font-semibold text-slate-100">券商帳戶與預設券商設定</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            輸入台灣習慣折數（如 2.8 折代表費率 × 0.28；元大/凱基一般日退或月退可分別設定）
+            輸入台灣習慣折數（如 2.8 折代表費率 × 0.28）；設為預設後，新增交易、配息、損平試算與 CSV 匯入皆優先套用該券商
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {accounts.map((acc) => (
-            <div
-              key={acc.id}
-              className="rounded-lg border border-slate-800 bg-slate-900/70 p-3.5 flex items-center justify-between gap-3"
-            >
-              <div>
-                <div className="font-medium text-sm text-slate-100">{acc.name}</div>
-                <div className="text-xs font-mono text-slate-400 mt-1 space-x-2">
-                  <span className="text-sky-300">{formatDiscount(acc.feeDiscount)}</span>
-                  <span>· 整股低消 {acc.minFeeLot}</span>
-                  <span>· 零股低消 {acc.minFeeOdd}</span>
-                  <span>· {acc.rebateMode === 'DAILY' ? '日退折讓' : '月退折讓'}</span>
+          {accounts.map((acc) => {
+            const isDefault = acc.id === defaultAccountId;
+            const isEditingThis = editingAccountId === acc.id;
+            return (
+              <div
+                key={acc.id}
+                className={`rounded-lg border p-3.5 flex items-center justify-between gap-3 transition-colors ${
+                  isDefault
+                    ? 'border-sky-500/50 bg-sky-500/5'
+                    : 'border-slate-800 bg-slate-900/70'
+                } ${isEditingThis ? 'ring-1 ring-amber-400/60' : ''}`}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-sm text-slate-100 truncate">
+                      {acc.name}
+                    </span>
+                    {isDefault && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/15 text-sky-300 border border-sky-500/35">
+                        <Star size={11} weight="fill" aria-hidden="true" />
+                        預設券商
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs font-mono text-slate-400 mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                    <span className="text-sky-300">{formatDiscount(acc.feeDiscount)}</span>
+                    <span>· 整股低消 {acc.minFeeLot}</span>
+                    <span>· 零股低消 {acc.minFeeOdd}</span>
+                    <span>· {acc.rebateMode === 'DAILY' ? '日退折讓' : '月退折讓'}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {!isDefault && (
+                    <button
+                      type="button"
+                      onClick={() => void handleSetDefaultAccount(acc)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-sky-500/20 text-slate-300 hover:text-sky-300 border border-slate-700 hover:border-sky-500/40 transition-colors"
+                    >
+                      <Star size={12} aria-hidden="true" />
+                      <span>設為預設</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditAccount(acc)}
+                    className={`p-1.5 rounded-lg hover:bg-slate-800 transition-colors ${
+                      isEditingThis
+                        ? 'text-amber-300 bg-amber-500/15'
+                        : 'text-slate-400 hover:text-slate-100'
+                    }`}
+                    aria-label={`編輯 ${acc.name}`}
+                  >
+                    <PencilSimple size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteAccount(acc.id)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                    aria-label={`刪除 ${acc.name}`}
+                  >
+                    <Trash size={15} />
+                  </button>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleDeleteAccount(acc.id)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800"
-                aria-label={`刪除 ${acc.name}`}
-              >
-                <Trash size={15} />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        <form onSubmit={(e) => void handleAddAccount(e)} className="pt-2 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-6 gap-3 items-end">
-          <label className="col-span-2 sm:col-span-2 block space-y-1">
-            <span className="text-xs text-slate-400">券商名稱</span>
-            <input
-              type="text"
-              value={accName}
-              onChange={(e) => setAccName(e.target.value)}
-              placeholder="例如：永豐大戶投"
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-slate-100"
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs text-slate-400">折數 (折)</span>
-            <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              max="10"
-              value={accDiscountZhe}
-              onChange={(e) => setAccDiscountZhe(e.target.value)}
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-slate-100"
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs text-slate-400">整股 / 零股低消</span>
-            <div className="grid grid-cols-2 gap-1.5">
-              <input
-                type="number"
-                min="0"
-                value={accMinLot}
-                onChange={(e) => setAccMinLot(e.target.value)}
-                title="整股最低手續費"
-                className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-xs font-mono text-slate-100"
-              />
-              <input
-                type="number"
-                min="0"
-                value={accMinOdd}
-                onChange={(e) => setAccMinOdd(e.target.value)}
-                title="零股最低手續費"
-                className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-xs font-mono text-slate-100"
-              />
+        <form onSubmit={(e) => void handleSubmitAccount(e)} className="pt-3 border-t border-slate-800 space-y-3">
+          {editingAccountId && (
+            <div className="flex items-center justify-between rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <span>正在編輯既有券商設定（原交易紀錄與折數將同步套用更新）</span>
+              <button
+                type="button"
+                onClick={resetAccountForm}
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
+              >
+                取消編輯
+              </button>
             </div>
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs text-slate-400">折讓方式</span>
-            <select
-              value={accRebateMode}
-              onChange={(e) => setAccRebateMode(e.target.value as RebateMode)}
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-slate-100"
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 items-end">
+            <label className="col-span-2 sm:col-span-2 block space-y-1">
+              <span className="text-xs text-slate-400">券商名稱</span>
+              <input
+                type="text"
+                value={accName}
+                onChange={(e) => setAccName(e.target.value)}
+                placeholder="例如：永豐大戶投"
+                className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-slate-100"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">折數 (折)</span>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="10"
+                value={accDiscountZhe}
+                onChange={(e) => setAccDiscountZhe(e.target.value)}
+                className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-slate-100"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">整股 / 零股低消</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <input
+                  type="number"
+                  min="0"
+                  value={accMinLot}
+                  onChange={(e) => setAccMinLot(e.target.value)}
+                  title="整股最低手續費"
+                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-xs font-mono text-slate-100"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  value={accMinOdd}
+                  onChange={(e) => setAccMinOdd(e.target.value)}
+                  title="零股最低手續費"
+                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-xs font-mono text-slate-100"
+                />
+              </div>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">折讓方式</span>
+              <select
+                value={accRebateMode}
+                onChange={(e) => setAccRebateMode(e.target.value as RebateMode)}
+                className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2.5 py-2 text-xs text-slate-100"
+              >
+                <option value="DAILY">日退 / 折讓直扣</option>
+                <option value="MONTHLY">月退 (交割計全額)</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-slate-950"
             >
-              <option value="DAILY">日退 / 折讓直扣</option>
-              <option value="MONTHLY">月退 (交割計全額)</option>
-            </select>
+              {editingAccountId ? (
+                <>
+                  <Check size={14} weight="bold" aria-hidden="true" />
+                  <span>儲存變更</span>
+                </>
+              ) : (
+                <>
+                  <Plus size={14} weight="bold" aria-hidden="true" />
+                  <span>新增券商</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={accSetAsDefault}
+              disabled={editingAccountId === defaultAccountId}
+              onChange={(e) => setAccSetAsDefault(e.target.checked)}
+              className="rounded border-slate-600 bg-slate-900 text-sky-500 disabled:opacity-60"
+            />
+            <span>
+              設為預設券商（新增交易、配息、損平試算與 CSV 匯入時自動套用）
+              {editingAccountId === defaultAccountId && ' — 目前已為預設券商'}
+            </span>
           </label>
-          <button
-            type="submit"
-            className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-slate-950"
-          >
-            <Plus size={14} weight="bold" aria-hidden="true" />
-            <span>新增券商</span>
-          </button>
         </form>
       </section>
 

@@ -7,7 +7,7 @@ import type {
   TradeType,
   Transaction,
 } from '@/engine/types';
-import { db, touchLastModified } from './schema';
+import { db, resolveDefaultAccountId, touchLastModified } from './schema';
 
 function escapeCsvCell(value: string | number | boolean | null | undefined): string {
   const str = value === undefined || value === null ? '' : String(value);
@@ -260,6 +260,7 @@ export function parseTransactionsCsv(
   csvText: string,
   accounts: Account[],
   securities: Security[],
+  defaultAccountId?: string,
 ): CsvParseTransactionsResult {
   const rows = parseCsvRows(csvText);
   if (rows.length < 2) {
@@ -286,7 +287,7 @@ export function parseTransactionsCsv(
     };
   }
 
-  const defaultAccount = accounts[0];
+  const resolvedDefaultId = resolveDefaultAccountId(accounts, defaultAccountId);
   const accountById = new Map(accounts.map((a) => [a.id, a]));
   const accountByName = new Map(accounts.map((a) => [a.name.trim().toLowerCase(), a]));
   const knownSymbols = new Set(securities.map((s) => s.symbol));
@@ -342,7 +343,7 @@ export function parseTransactionsCsv(
     const allowDayTrade = tradeType === 'LOT' ? parseBool(get('allowDayTrade'), true) : false;
 
     const rawAcc = get('account');
-    let accountId = defaultAccount?.id ?? 'acc-default';
+    let accountId = resolvedDefaultId || 'acc-default';
     if (rawAcc !== '') {
       const matched =
         accountById.get(rawAcc) ?? accountByName.get(rawAcc.toLowerCase());

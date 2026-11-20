@@ -33,6 +33,7 @@ interface OverviewPageProps {
   analytics: LedgerAnalytics;
   xirr: XirrResult;
   accounts: Account[];
+  defaultAccountId?: string;
   securities: Security[];
   hasTransactions: boolean;
   onOpenNewTrade: (mode?: 'single' | 'pair') => void;
@@ -45,6 +46,7 @@ export function OverviewPage({
   analytics,
   xirr,
   accounts,
+  defaultAccountId,
   securities,
   hasTransactions,
   onOpenNewTrade,
@@ -380,7 +382,11 @@ export function OverviewPage({
       />
 
       {/* 回補損平試算器 */}
-      <BreakevenCalculator accounts={accounts} securities={securities} />
+      <BreakevenCalculator
+        accounts={accounts}
+        defaultAccountId={defaultAccountId}
+        securities={securities}
+      />
 
       {/* 最近已實現損益 & 費稅統計 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

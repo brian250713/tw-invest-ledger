@@ -53,6 +53,20 @@ class InvestLedgerDB extends Dexie {
 export const db = new InvestLedgerDB();
 
 export const DEFAULT_ACCOUNT_ID = 'acc-default';
+export const DEFAULT_ACCOUNT_META_KEY = 'defaultAccountId';
+
+/**
+ * 依偏好 ID 解析有效的預設券商 ID；無效時自動退回第一個現有券商。
+ */
+export function resolveDefaultAccountId(
+  accounts: Account[],
+  preferredAccountId?: string | null,
+): string {
+  if (preferredAccountId && accounts.some((a) => a.id === preferredAccountId)) {
+    return preferredAccountId;
+  }
+  return accounts[0]?.id ?? '';
+}
 
 let initPromise: Promise<void> | null = null;
 
@@ -73,6 +87,15 @@ export function ensureInitialData(): Promise<void> {
             minFeeOdd: 1,
             rebateMode: 'DAILY',
             createdAt: new Date().toISOString(),
+          });
+        }
+
+        const defaultMeta = await db.appMeta.get(DEFAULT_ACCOUNT_META_KEY);
+        if (!defaultMeta) {
+          const firstAcc = await db.accounts.orderBy('createdAt').first();
+          await db.appMeta.put({
+            key: DEFAULT_ACCOUNT_META_KEY,
+            value: firstAcc?.id ?? DEFAULT_ACCOUNT_ID,
           });
         }
 
@@ -134,9 +157,25 @@ export async function convertPendingToGeneralSell(id: string): Promise<void> {
   });
 }
 
-export async function upsertAccount(account: Account): Promise<void> {
+export async function setDefaultAccountId(accountId: string): Promise<boolean> {
+  return db.transaction('rw', db.accounts, db.appMeta, async () => {
+    const exists = await db.accounts.get(accountId);
+    if (!exists) return false;
+    await db.appMeta.put({ key: DEFAULT_ACCOUNT_META_KEY, value: accountId });
+    await touchLastModified();
+    return true;
+  });
+}
+
+export async function upsertAccount(
+  account: Account,
+  options?: { setAsDefault?: boolean },
+): Promise<void> {
   await db.transaction('rw', db.accounts, db.appMeta, async () => {
     await db.accounts.put(account);
+    if (options?.setAsDefault) {
+      await db.appMeta.put({ key: DEFAULT_ACCOUNT_META_KEY, value: account.id });
+    }
     await touchLastModified();
   });
 }
@@ -146,12 +185,23 @@ export async function deleteAccount(accountId: string): Promise<{ ok: boolean; r
   if (count <= 1) {
     return { ok: false, reason: '至少需保留一個券商帳戶' };
   }
-  const usedCount = await db.transactions.where('accountId').equals(accountId).count();
-  if (usedCount > 0) {
-    return { ok: false, reason: `此帳戶尚有 ${usedCount} 筆交易紀錄，無法刪除` };
+  const usedTxCount = await db.transactions.where('accountId').equals(accountId).count();
+  if (usedTxCount > 0) {
+    return { ok: false, reason: `此帳戶尚有 ${usedTxCount} 筆交易紀錄，無法刪除` };
+  }
+  const usedDivCount = await db.dividends.where('accountId').equals(accountId).count();
+  if (usedDivCount > 0) {
+    return { ok: false, reason: `此帳戶尚有 ${usedDivCount} 筆配息紀錄，無法刪除` };
   }
   await db.transaction('rw', db.accounts, db.appMeta, async () => {
     await db.accounts.delete(accountId);
+    const currentDefault = await db.appMeta.get(DEFAULT_ACCOUNT_META_KEY);
+    if (currentDefault?.value === accountId) {
+      const nextDefault = await db.accounts.orderBy('createdAt').first();
+      if (nextDefault) {
+        await db.appMeta.put({ key: DEFAULT_ACCOUNT_META_KEY, value: nextDefault.id });
+      }
+    }
     await touchLastModified();
   });
   return { ok: true };

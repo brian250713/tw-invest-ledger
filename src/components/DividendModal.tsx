@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Decimal from 'decimal.js';
 import { MagnifyingGlass, X } from '@phosphor-icons/react';
-import { upsertDividendRecord } from '@/db/schema';
+import { resolveDefaultAccountId, upsertDividendRecord } from '@/db/schema';
 import type { Account, DividendRecord, HoldingPosition, Security } from '@/engine/types';
 import { assetTypeLabel, formatTwd } from '@/lib/format';
 
@@ -9,6 +9,7 @@ interface DividendModalProps {
   isOpen: boolean;
   editingDividend: DividendRecord | null;
   accounts: Account[];
+  defaultAccountId?: string;
   securities: Security[];
   holdings: HoldingPosition[];
   onClose: () => void;
@@ -25,13 +26,16 @@ export function DividendModal({
   isOpen,
   editingDividend,
   accounts,
+  defaultAccountId,
   securities,
   holdings,
   onClose,
 }: DividendModalProps) {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [accountId, setAccountId] = useState<string>(accounts[0]?.id ?? '');
+  const [accountId, setAccountId] = useState<string>(() =>
+    resolveDefaultAccountId(accounts, defaultAccountId),
+  );
   const [symbol, setSymbol] = useState<string>('0050');
   const [symbolSearch, setSymbolSearch] = useState<string>('0050 元大台灣50');
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
@@ -76,7 +80,7 @@ export function DividendModal({
       return;
     }
 
-    const defaultAccId = accounts[0]?.id ?? '';
+    const defaultAccId = resolveDefaultAccountId(accounts, defaultAccountId);
     setAccountId(defaultAccId);
     const defaultHolding = holdings.find((h) => h.accountId === defaultAccId) ?? holdings[0];
     if (defaultHolding) {
@@ -99,7 +103,7 @@ export function DividendModal({
     setNhiTax('0');
     setNetOverride('');
     setNote('');
-  }, [isOpen, editingDividend, accounts, securities, holdings, today]);
+  }, [isOpen, editingDividend, accounts, defaultAccountId, securities, holdings, today]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -252,6 +256,7 @@ export function DividendModal({
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name}
+                    {acc.id === defaultAccountId ? ' [預設]' : ''}
                   </option>
                 ))}
               </select>

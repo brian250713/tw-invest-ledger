@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Calculator } from '@phosphor-icons/react';
+import { resolveDefaultAccountId } from '@/db/schema';
 import { calculateShortDayTradeBreakeven } from '@/engine/calculator';
 import type { Account, AssetType, Security } from '@/engine/types';
 import {
@@ -13,20 +14,30 @@ import {
 
 interface BreakevenCalculatorProps {
   accounts: Account[];
+  defaultAccountId?: string;
   securities: Security[];
 }
 
-export function BreakevenCalculator({ accounts, securities }: BreakevenCalculatorProps) {
-  const [accountId, setAccountId] = useState<string>(accounts[0]?.id ?? '');
+export function BreakevenCalculator({
+  accounts,
+  defaultAccountId,
+  securities,
+}: BreakevenCalculatorProps) {
+  const [manualAccountId, setManualAccountId] = useState<string | null>(null);
   const [symbolInput, setSymbolInput] = useState<string>('2330');
   const [assetTypeOverride, setAssetTypeOverride] = useState<AssetType>('STOCK');
   const [sellPriceInput, setSellPriceInput] = useState<string>('1000');
   const [lotsInput, setLotsInput] = useState<string>('1');
   const [isDayTrade, setIsDayTrade] = useState<boolean>(true);
 
+  const effectiveAccountId =
+    manualAccountId && accounts.some((a) => a.id === manualAccountId)
+      ? manualAccountId
+      : resolveDefaultAccountId(accounts, defaultAccountId);
+
   const selectedAccount = useMemo(
-    () => accounts.find((a) => a.id === accountId) ?? accounts[0],
-    [accounts, accountId],
+    () => accounts.find((a) => a.id === effectiveAccountId) ?? accounts[0],
+    [accounts, effectiveAccountId],
   );
 
   const matchedSecurity = useMemo(() => {
@@ -79,12 +90,13 @@ export function BreakevenCalculator({ accounts, securities }: BreakevenCalculato
           <span className="text-xs text-slate-400">券商折數</span>
           <select
             value={selectedAccount?.id ?? ''}
-            onChange={(e) => setAccountId(e.target.value)}
+            onChange={(e) => setManualAccountId(e.target.value)}
             className="w-full rounded-lg bg-slate-900 border border-slate-700 px-2.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
           >
             {accounts.map((acc) => (
               <option key={acc.id} value={acc.id}>
                 {acc.name} ({formatDiscount(acc.feeDiscount)})
+                {acc.id === defaultAccountId ? ' [預設]' : ''}
               </option>
             ))}
           </select>

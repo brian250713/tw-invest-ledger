@@ -18,6 +18,7 @@ import type {
 import {
   addPairedTransactions,
   addTransactionRecord,
+  resolveDefaultAccountId,
   updateTransactionRecord,
   upsertSecurity,
 } from '@/db/schema';
@@ -48,6 +49,7 @@ interface TradeModalProps {
   isOpen: boolean;
   initialState: TradeModalInitialState | null;
   accounts: Account[];
+  defaultAccountId?: string;
   securities: Security[];
   onClose: () => void;
 }
@@ -63,13 +65,16 @@ export function TradeModal({
   isOpen,
   initialState,
   accounts,
+  defaultAccountId,
   securities,
   onClose,
 }: TradeModalProps) {
   const today = new Date().toISOString().slice(0, 10);
 
   const [tab, setTab] = useState<'single' | 'pair'>('single');
-  const [accountId, setAccountId] = useState<string>(accounts[0]?.id ?? '');
+  const [accountId, setAccountId] = useState<string>(() =>
+    resolveDefaultAccountId(accounts, defaultAccountId),
+  );
   const [symbol, setSymbol] = useState<string>('2330');
   const [symbolSearch, setSymbolSearch] = useState<string>('2330 台積電');
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
@@ -162,7 +167,7 @@ export function TradeModal({
     }
 
     setTab(initialState?.mode ?? 'single');
-    setAccountId(accounts[0]?.id ?? '');
+    setAccountId(resolveDefaultAccountId(accounts, defaultAccountId));
     const targetSym = initialState?.defaultSymbol ?? '2330';
     const defaultSec =
       securities.find((s) => s.symbol === targetSym) ??
@@ -193,7 +198,7 @@ export function TradeModal({
     setPairBuyFeeOverride('');
     setPairTaxOverride('');
     setPairNote('');
-  }, [isOpen, initialState, accounts, securities, today]);
+  }, [isOpen, initialState, accounts, defaultAccountId, securities, today]);
 
   // Esc 關閉視窗
   useEffect(() => {
@@ -219,8 +224,11 @@ export function TradeModal({
   }, [securities, symbolSearch]);
 
   const selectedAccount = useMemo(
-    () => accounts.find((a) => a.id === accountId) ?? accounts[0],
-    [accounts, accountId],
+    () =>
+      accounts.find((a) => a.id === accountId) ??
+      accounts.find((a) => a.id === defaultAccountId) ??
+      accounts[0],
+    [accounts, accountId, defaultAccountId],
   );
 
   const selectedSecurity = useMemo(
@@ -637,6 +645,7 @@ export function TradeModal({
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name} ({formatDiscount(acc.feeDiscount)})
+                    {acc.id === defaultAccountId ? ' [預設]' : ''}
                   </option>
                 ))}
               </select>

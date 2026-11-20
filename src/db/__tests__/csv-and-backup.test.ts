@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseAndValidateBackup } from '../backup';
 import { parseTransactionsCsv } from '../csv';
+import { resolveDefaultAccountId } from '../schema';
 import type { Account, Security } from '@/engine/types';
 
 const accounts: Account[] = [
@@ -12,6 +13,15 @@ const accounts: Account[] = [
     minFeeOdd: 1,
     rebateMode: 'DAILY',
     createdAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'acc-2',
+    name: '富邦證券 (1.8折)',
+    feeDiscount: 0.18,
+    minFeeLot: 20,
+    minFeeOdd: 1,
+    rebateMode: 'DAILY',
+    createdAt: '2026-01-02T00:00:00Z',
   },
 ];
 
@@ -99,5 +109,43 @@ describe('csv & backup - CSV 匯入解析與 JSON 備份向下相容測試', () 
     });
     const parsedV2 = parseAndValidateBackup(v2Json);
     expect(parsedV2.dividends).toHaveLength(1);
+    expect(parsedV2.defaultAccountId).toBeNull();
+  });
+
+  it('resolveDefaultAccountId 優先命中偏好券商並於無效時安全退回第一筆', () => {
+    expect(resolveDefaultAccountId(accounts, 'acc-2')).toBe('acc-2');
+    expect(resolveDefaultAccountId(accounts, 'not-exists')).toBe('acc-1');
+    expect(resolveDefaultAccountId(accounts, null)).toBe('acc-1');
+    expect(resolveDefaultAccountId([], 'acc-2')).toBe('');
+  });
+
+  it('parseTransactionsCsv 未指定券商時套用自訂 defaultAccountId，有指定則維持原券商', () => {
+    const csv = [
+      '交易日期,券商帳戶,代號,買賣,股數,單價',
+      '2026-11-01,,2330,BUY,1000,1000',
+      '2026-11-02,元大主帳 (2.8折),2330,SELL,1000,1020',
+    ].join('\n');
+
+    const res = parseTransactionsCsv(csv, accounts, securities, 'acc-2');
+    expect(res.errors).toHaveLength(0);
+    expect(res.validTransactions).toHaveLength(2);
+    expect(res.validTransactions[0].accountId).toBe('acc-2');
+    expect(res.validTransactions[1].accountId).toBe('acc-1');
+  });
+
+  it('parseAndValidateBackup 正確保留備份檔內的 defaultAccountId', () => {
+    const jsonWithDefault = JSON.stringify({
+      schemaVersion: 2,
+      app: 'tw-invest-ledger',
+      exportedAt: '2026-11-20T00:00:00Z',
+      defaultAccountId: 'acc-2',
+      accounts,
+      securities,
+      transactions: [],
+      dividends: [],
+    });
+
+    const parsed = parseAndValidateBackup(jsonWithDefault);
+    expect(parsed.defaultAccountId).toBe('acc-2');
   });
 });
