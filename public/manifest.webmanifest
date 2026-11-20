@@ -1,0 +1,18 @@
+{
+  "name": "台股收益帳本｜TW Invest Ledger",
+  "short_name": "台股帳本",
+  "description": "純本地台股/ETF 個人收益與當沖先賣後買帳本",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "lang": "zh-Hant",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
