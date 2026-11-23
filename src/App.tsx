@@ -32,6 +32,13 @@ import type {
   Security,
   Transaction,
 } from '@/engine/types';
+import {
+  applyDisplayPrefsToDocument,
+  loadDisplayPrefs,
+  saveDisplayPrefs,
+  togglePresbyopiaQuickMode,
+  type DisplayPrefs,
+} from '@/lib/displayPrefs';
 import { shouldAutoSyncQuotes, syncMarketQuotes } from '@/lib/quotes';
 import { CalculatorPage } from '@/pages/CalculatorPage';
 import { DividendsPage } from '@/pages/DividendsPage';
@@ -50,6 +57,7 @@ const EMPTY_META_ROWS: AppMetaEntry[] = [];
 export function App() {
   const [ready, setReady] = useState(false);
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
+  const [displayPrefs, setDisplayPrefs] = useState<DisplayPrefs>(() => loadDisplayPrefs());
   const [modalState, setModalState] = useState<TradeModalInitialState | null>(null);
   const [dividendModalOpen, setDividendModalOpen] = useState(false);
   const [editingDividend, setEditingDividend] = useState<DividendRecord | null>(null);
@@ -66,6 +74,15 @@ export function App() {
   const lastAutoSyncedModifiedRef = useRef<string | null>(null);
   const isSyncingQuotesRef = useRef(false);
   const hasCheckedAutoSyncRef = useRef(false);
+
+  useEffect(() => {
+    applyDisplayPrefsToDocument(displayPrefs);
+    saveDisplayPrefs(displayPrefs);
+  }, [displayPrefs]);
+
+  const handleTogglePresbyopiaQuickMode = useCallback(() => {
+    setDisplayPrefs((prev) => togglePresbyopiaQuickMode(prev));
+  }, []);
 
   useEffect(() => {
     void ensureInitialData().then(async () => {
@@ -289,6 +306,8 @@ export function App() {
         onSyncQuotes={() => void handleSyncQuotes(true)}
         fileSyncActive={fileSyncState.bound && fileSyncState.permission === 'granted'}
         fileSyncName={fileSyncState.fileName}
+        displayPrefs={displayPrefs}
+        onTogglePresbyopiaMode={handleTogglePresbyopiaQuickMode}
       >
         {syncNotice && (
           <div
@@ -323,6 +342,7 @@ export function App() {
             analytics={analytics}
             xirr={xirr}
             hasTransactions={transactions.length > 0}
+            displayPrefs={displayPrefs}
             onOpenNewTrade={(mode) => handleOpenNewTrade(mode)}
             onCoverShort={handleCoverShort}
             onNavigateTab={setActiveTab}
@@ -343,6 +363,7 @@ export function App() {
             summary={summary}
             analytics={analytics}
             accounts={accounts}
+            displayPrefs={displayPrefs}
             onEditTransaction={handleEditTransaction}
           />
         )}
@@ -351,6 +372,7 @@ export function App() {
           <DividendsPage
             summary={summary}
             analytics={analytics}
+            displayPrefs={displayPrefs}
             onAddDividend={() => {
               setEditingDividend(null);
               setDividendModalOpen(true);
@@ -380,6 +402,8 @@ export function App() {
             lastModifiedAt={lastModifiedAt}
             lastBackupAt={lastBackupAt}
             fileSyncState={fileSyncState}
+            displayPrefs={displayPrefs}
+            onChangeDisplayPrefs={setDisplayPrefs}
             onBindLocalFile={handleBindLocalFile}
             onResumeLocalFile={handleResumeLocalFile}
             onSyncLocalFileNow={handleSyncLocalFileNow}

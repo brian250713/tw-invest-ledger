@@ -3,6 +3,7 @@ import { PencilSimple, Trash } from '@phosphor-icons/react';
 import { DayTradeAnalyticsPanel } from '@/components/DayTradeAnalyticsPanel';
 import { deleteTransactionRecord } from '@/db/schema';
 import type { Account, LedgerAnalytics, LedgerSummary, Transaction } from '@/engine/types';
+import type { DisplayPrefs } from '@/lib/displayPrefs';
 import {
   formatPct,
   formatPrice,
@@ -16,6 +17,7 @@ interface TransactionsPageProps {
   summary: LedgerSummary;
   analytics: LedgerAnalytics;
   accounts: Account[];
+  displayPrefs: DisplayPrefs;
   onEditTransaction: (tx: Transaction) => void;
 }
 
@@ -23,6 +25,7 @@ export function TransactionsPage({
   summary,
   analytics,
   accounts,
+  displayPrefs,
   onEditTransaction,
 }: TransactionsPageProps) {
   const [subTab, setSubTab] = useState<'all' | 'daytrade' | 'swing'>('all');
@@ -307,6 +310,7 @@ export function TransactionsPage({
           <DayTradeAnalyticsPanel
             stats={summary.dayTradeStats}
             analytics={analytics.dayTradeAnalytics}
+            displayPrefs={displayPrefs}
           />
           <div className="rounded-xl border border-slate-800 bg-[#0B1120] overflow-hidden">
           {filteredDayTrades.length === 0 ? (

@@ -7,6 +7,7 @@ import {
   Clock,
   CurrencyDollar,
   DownloadSimple,
+  Eyeglasses,
   FloppyDiskBack,
   GearSix,
   Plus,
@@ -14,6 +15,7 @@ import {
   Stack,
   WarningCircle,
 } from '@phosphor-icons/react';
+import { isPresbyopiaModeActive, type DisplayPrefs } from '@/lib/displayPrefs';
 import { formatQuoteSyncTime } from '@/lib/format';
 
 export type NavTab =
@@ -37,6 +39,8 @@ interface AppShellProps {
   onSyncQuotes: () => void;
   fileSyncActive: boolean;
   fileSyncName: string | null;
+  displayPrefs: DisplayPrefs;
+  onTogglePresbyopiaMode: () => void;
   children: ReactNode;
 }
 
@@ -62,12 +66,16 @@ export function AppShell({
   onSyncQuotes,
   fileSyncActive,
   fileSyncName,
+  displayPrefs,
+  onTogglePresbyopiaMode,
   children,
 }: AppShellProps) {
+  const presbyopiaActive = isPresbyopiaModeActive(displayPrefs);
+
   return (
     <div className="min-h-screen bg-[#020617] text-slate-50 flex flex-col lg:flex-row">
       {/* 桌面左側邊欄 */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 border-r border-slate-800/80 bg-[#0B1120]">
+      <aside className="hidden lg:flex lg:w-[var(--sidebar-width)] lg:flex-col lg:fixed lg:inset-y-0 border-r border-slate-800/80 bg-[#0B1120]">
         <div className="px-5 py-5 border-b border-slate-800/80">
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 font-mono font-bold text-sm">
@@ -125,10 +133,10 @@ export function AppShell({
       </aside>
 
       {/* 主內容區 */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0 pb-20 lg:pb-0">
+      <div className="flex-1 lg:pl-[var(--sidebar-width)] flex flex-col min-w-0 pb-24 lg:pb-0">
         {/* 頂部狀態列 */}
         <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#020617]/90 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-3">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-15 py-2 flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="lg:hidden font-mono font-bold text-xs px-2 py-1 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
                 TW
@@ -198,6 +206,31 @@ export function AppShell({
               </span>
               <button
                 type="button"
+                onClick={onTogglePresbyopiaMode}
+                aria-pressed={presbyopiaActive}
+                title={
+                  presbyopiaActive
+                    ? '目前已啟用老花眼護眼大字顯示，點擊可切回標準深色模式（或至「設定與備份」細調）'
+                    : '一鍵切換為老花眼友善介面（放大字體、護眼暖白底、高對比防串行）'
+                }
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                  presbyopiaActive
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                }`}
+              >
+                <Eyeglasses
+                  size={16}
+                  weight={presbyopiaActive ? 'fill' : 'regular'}
+                  className={presbyopiaActive ? 'text-amber-400' : 'text-sky-400'}
+                  aria-hidden="true"
+                />
+                <span className="hidden sm:inline">
+                  {presbyopiaActive ? '護眼大字中' : '老花閱讀'}
+                </span>
+              </button>
+              <button
+                type="button"
                 onClick={onSyncQuotes}
                 disabled={isSyncingQuotes || !canSyncQuotes}
                 title={
@@ -245,7 +278,7 @@ export function AppShell({
                 key={item.id}
                 type="button"
                 onClick={() => onChangeTab(item.id)}
-                className={`relative flex flex-col items-center justify-center py-2.5 text-[11px] font-medium transition-colors ${
+                className={`relative flex flex-col items-center justify-center py-2 px-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
                   active ? 'text-sky-400' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >

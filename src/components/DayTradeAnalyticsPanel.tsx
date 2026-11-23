@@ -10,17 +10,25 @@ import {
 } from 'recharts';
 import { Lightning } from '@phosphor-icons/react';
 import type { DayTradeAnalytics, DayTradeStats } from '@/engine/types';
+import { getChartThemeConfig, type DisplayPrefs } from '@/lib/displayPrefs';
 import { formatPct, formatTwd, pnlColorClass } from '@/lib/format';
 
 interface DayTradeAnalyticsPanelProps {
   stats: DayTradeStats;
   analytics: DayTradeAnalytics;
+  displayPrefs: DisplayPrefs;
 }
 
-export function DayTradeAnalyticsPanel({ stats, analytics }: DayTradeAnalyticsPanelProps) {
+export function DayTradeAnalyticsPanel({
+  stats,
+  analytics,
+  displayPrefs,
+}: DayTradeAnalyticsPanelProps) {
   if (stats.totalTrades === 0) {
     return null;
   }
+
+  const chartTheme = getChartThemeConfig(displayPrefs);
 
   const values = analytics.cumulativeCurve.map((p) => p.cumulativePnl);
   const maxVal = Math.max(...values, 0);
@@ -92,7 +100,7 @@ export function DayTradeAnalyticsPanel({ stats, analytics }: DayTradeAnalyticsPa
             <h3 className="text-sm font-semibold text-slate-100">當沖累計淨損益曲線</h3>
             <p className="text-xs text-slate-400">紅區代表累計淨賺、綠區代表累計淨虧</p>
           </div>
-          <div className="h-52 w-full">
+          <div className={`${chartTheme.compactHeightClass} w-full`}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={analytics.cumulativeCurve}
@@ -100,39 +108,41 @@ export function DayTradeAnalyticsPanel({ stats, analytics }: DayTradeAnalyticsPa
               >
                 <defs>
                   <linearGradient id="dtSplitColor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset={zeroOffset} stopColor="#FB7185" stopOpacity={0.35} />
-                    <stop offset={zeroOffset} stopColor="#34D399" stopOpacity={0.35} />
+                    <stop offset={zeroOffset} stopColor={chartTheme.areaColors.positive} stopOpacity={0.35} />
+                    <stop offset={zeroOffset} stopColor={chartTheme.areaColors.negative} stopOpacity={0.35} />
                   </linearGradient>
                   <linearGradient id="dtSplitStroke" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset={zeroOffset} stopColor="#FB7185" stopOpacity={1} />
-                    <stop offset={zeroOffset} stopColor="#34D399" stopOpacity={1} />
+                    <stop offset={zeroOffset} stopColor={chartTheme.areaColors.positive} stopOpacity={1} />
+                    <stop offset={zeroOffset} stopColor={chartTheme.areaColors.negative} stopOpacity={1} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke={chartTheme.gridStroke} strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  axisLine={{ stroke: '#334155' }}
+                  tick={{ fill: chartTheme.tickFill, fontSize: chartTheme.tickFontSize }}
+                  axisLine={{ stroke: chartTheme.axisStroke }}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
+                  tick={{ fill: chartTheme.tickFill, fontSize: chartTheme.tickFontSize }}
                   axisLine={false}
                   tickLine={false}
-                  width={62}
+                  width={chartTheme.yAxisWidth}
                   tickFormatter={(v: number) =>
                     Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
                   }
                 />
-                <ReferenceLine y={0} stroke="#475569" />
+                <ReferenceLine y={0} stroke={chartTheme.referenceStroke} />
                 <Tooltip
                   formatter={(value) => [formatTwd(Number(value ?? 0), true), '累計淨損益']}
                   contentStyle={{
-                    backgroundColor: '#020617',
-                    borderColor: '#334155',
+                    backgroundColor: chartTheme.tooltipBg,
+                    borderColor: chartTheme.tooltipBorder,
                     borderRadius: '0.75rem',
-                    fontSize: '12px',
+                    fontSize: chartTheme.tooltipFontSize,
+                    color: chartTheme.tooltipText,
                   }}
+                  itemStyle={{ color: chartTheme.tooltipText }}
                 />
                 <Area
                   type="monotone"

@@ -11,19 +11,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { AssetType, LedgerAnalytics, MonthlyRealizedPoint } from '@/engine/types';
+import type { LedgerAnalytics, MonthlyRealizedPoint } from '@/engine/types';
+import { getChartThemeConfig, type DisplayPrefs } from '@/lib/displayPrefs';
 import { formatPct, formatTwd, pnlColorClass } from '@/lib/format';
 
 interface DashboardChartsProps {
   analytics: LedgerAnalytics;
   hasPricedHoldings: boolean;
+  displayPrefs: DisplayPrefs;
 }
-
-const ASSET_COLORS: Record<AssetType, string> = {
-  STOCK: '#38BDF8',
-  ETF_EQUITY: '#F59E0B',
-  ETF_BOND: '#34D399',
-};
 
 interface MonthlyTooltipProps {
   active?: boolean;
@@ -65,8 +61,13 @@ function MonthlyTooltip({ active, payload, label }: MonthlyTooltipProps) {
   );
 }
 
-export function DashboardCharts({ analytics, hasPricedHoldings }: DashboardChartsProps) {
+export function DashboardCharts({
+  analytics,
+  hasPricedHoldings,
+  displayPrefs,
+}: DashboardChartsProps) {
   const { monthlyRealized, allocationByAssetType, allocationBySymbol } = analytics;
+  const chartTheme = getChartThemeConfig(displayPrefs);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -98,33 +99,51 @@ export function DashboardCharts({ analytics, hasPricedHoldings }: DashboardChart
             尚無已實現損益紀錄，完成賣出或當沖配對後將繪製月度趨勢圖
           </div>
         ) : (
-          <div className="h-64 w-full">
+          <div className={`${chartTheme.chartHeightClass} w-full`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={monthlyRealized}
                 margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
               >
-                <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke={chartTheme.gridStroke} strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  axisLine={{ stroke: '#334155' }}
+                  tick={{ fill: chartTheme.tickFill, fontSize: chartTheme.tickFontSize }}
+                  axisLine={{ stroke: chartTheme.axisStroke }}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
+                  tick={{ fill: chartTheme.tickFill, fontSize: chartTheme.tickFontSize }}
                   axisLine={false}
                   tickLine={false}
-                  width={68}
+                  width={chartTheme.yAxisWidth}
                   tickFormatter={(v: number) =>
                     Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
                   }
                 />
-                <ReferenceLine y={0} stroke="#475569" />
-                <Tooltip content={<MonthlyTooltip />} cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }} />
-                <Bar dataKey="swingPnl" name="波段損益" fill="#38BDF8" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                <Bar dataKey="dayTradePnl" name="當沖損益" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                <Bar dataKey="dividendPnl" name="配息入帳" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <ReferenceLine y={0} stroke={chartTheme.referenceStroke} />
+                <Tooltip content={<MonthlyTooltip />} cursor={{ fill: chartTheme.cursorFill }} />
+                <Bar
+                  dataKey="swingPnl"
+                  name="波段損益"
+                  fill={chartTheme.barColors.swing}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={32}
+                />
+                <Bar
+                  dataKey="dayTradePnl"
+                  name="當沖損益"
+                  fill={chartTheme.barColors.dayTrade}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={32}
+                />
+                <Bar
+                  dataKey="dividendPnl"
+                  name="配息入帳"
+                  fill={chartTheme.barColors.dividend}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={32}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -158,22 +177,22 @@ export function DashboardCharts({ analytics, hasPricedHoldings }: DashboardChart
                     innerRadius={48}
                     outerRadius={72}
                     paddingAngle={3}
-                    stroke="#0B1120"
+                    stroke={chartTheme.pieStroke}
                     strokeWidth={2}
                   >
                     {allocationByAssetType.map((entry) => (
-                      <Cell key={entry.assetType} fill={ASSET_COLORS[entry.assetType]} />
+                      <Cell key={entry.assetType} fill={chartTheme.assetColors[entry.assetType]} />
                     ))}
                   </Pie>
                   <Tooltip
                     formatter={(val) => formatTwd(Number(val ?? 0))}
                     contentStyle={{
-                      backgroundColor: '#020617',
-                      borderColor: '#334155',
+                      backgroundColor: chartTheme.tooltipBg,
+                      borderColor: chartTheme.tooltipBorder,
                       borderRadius: '0.75rem',
-                      fontSize: '12px',
+                      fontSize: chartTheme.tooltipFontSize,
                     }}
-                    itemStyle={{ color: '#F8FAFC' }}
+                    itemStyle={{ color: chartTheme.tooltipText }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -185,7 +204,7 @@ export function DashboardCharts({ analytics, hasPricedHoldings }: DashboardChart
                   <span className="inline-flex items-center gap-2 font-sans text-slate-200">
                     <span
                       className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: ASSET_COLORS[slice.assetType] }}
+                      style={{ backgroundColor: chartTheme.assetColors[slice.assetType] }}
                     />
                     {slice.label} ({slice.count})
                   </span>

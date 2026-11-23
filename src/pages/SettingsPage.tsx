@@ -2,14 +2,19 @@ import { useRef, useState } from 'react';
 import {
   Check,
   CheckCircle,
+  CircleHalf,
   DownloadSimple,
+  Eyeglasses,
   FileCsv,
   FloppyDiskBack,
   LinkBreak,
+  Moon,
   PencilSimple,
   Plus,
   Sparkle,
   Star,
+  Sun,
+  TextAa,
   Trash,
   UploadSimple,
   WarningCircle,
@@ -44,6 +49,12 @@ import type {
   RebateMode,
   Security,
 } from '@/engine/types';
+import {
+  PRESBYOPIA_DISPLAY_PREFS,
+  STANDARD_DISPLAY_PREFS,
+  type DisplayPrefs,
+  type ReadingScale,
+} from '@/lib/displayPrefs';
 import { assetTypeLabel, formatDiscount } from '@/lib/format';
 
 interface SettingsPageProps {
@@ -54,6 +65,8 @@ interface SettingsPageProps {
   lastModifiedAt?: string | null;
   lastBackupAt?: string | null;
   fileSyncState: SavedFileHandleState;
+  displayPrefs: DisplayPrefs;
+  onChangeDisplayPrefs: (next: DisplayPrefs) => void;
   onBindLocalFile: () => Promise<void>;
   onResumeLocalFile: () => Promise<void>;
   onSyncLocalFileNow: () => Promise<void>;
@@ -68,6 +81,8 @@ export function SettingsPage({
   lastModifiedAt,
   lastBackupAt,
   fileSyncState,
+  displayPrefs,
+  onChangeDisplayPrefs,
   onBindLocalFile,
   onResumeLocalFile,
   onSyncLocalFileNow,
@@ -323,6 +338,219 @@ export function SettingsPage({
           <span>{statusMsg.text}</span>
         </div>
       )}
+
+      {/* 老花眼閱讀與顯示設定 */}
+      <section className="rounded-xl border border-slate-800 bg-[#0B1120] p-5 space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <Eyeglasses size={20} weight="fill" className="text-sky-400" aria-hidden="true" />
+              <span>老花眼閱讀與顯示設定</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              即時套用於此裝置，不影響帳本備份與交易紀錄
+            </p>
+          </div>
+        </div>
+
+        {/* 快速情境預設 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {(() => {
+            const isStandardPreset =
+              displayPrefs.scale === STANDARD_DISPLAY_PREFS.scale &&
+              displayPrefs.theme === STANDARD_DISPLAY_PREFS.theme &&
+              displayPrefs.highContrast === STANDARD_DISPLAY_PREFS.highContrast;
+            const isPresbyopiaPreset =
+              displayPrefs.scale === PRESBYOPIA_DISPLAY_PREFS.scale &&
+              displayPrefs.theme === PRESBYOPIA_DISPLAY_PREFS.theme &&
+              displayPrefs.highContrast === PRESBYOPIA_DISPLAY_PREFS.highContrast;
+
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onChangeDisplayPrefs({ ...STANDARD_DISPLAY_PREFS })}
+                  aria-pressed={isStandardPreset}
+                  className={`text-left rounded-xl border p-4 transition-colors space-y-1 ${
+                    isStandardPreset
+                      ? 'border-sky-500/50 bg-sky-500/10'
+                      : 'border-slate-800 bg-slate-900/70 hover:bg-slate-800/70'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-100">
+                      <Moon size={16} weight="fill" className="text-sky-400" aria-hidden="true" />
+                      <span>標準深色模式</span>
+                    </span>
+                    {isStandardPreset && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                        使用中
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    預設字級（100%）· 深色夜間介面 · 標準對比度
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onChangeDisplayPrefs({ ...PRESBYOPIA_DISPLAY_PREFS })}
+                  aria-pressed={isPresbyopiaPreset}
+                  className={`text-left rounded-xl border p-4 transition-colors space-y-1 ${
+                    isPresbyopiaPreset
+                      ? 'border-amber-500/50 bg-amber-500/15'
+                      : 'border-slate-800 bg-slate-900/70 hover:bg-slate-800/70'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-100">
+                      <Eyeglasses
+                        size={17}
+                        weight="fill"
+                        className="text-amber-400"
+                        aria-hidden="true"
+                      />
+                      <span>老花眼舒適模式（推薦）</span>
+                    </span>
+                    {isPresbyopiaPreset && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        使用中
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    放大字體（119%）· 護眼暖白底降低光暈 · 高對比與表格防串行
+                  </p>
+                </button>
+              </>
+            );
+          })()}
+        </div>
+
+        {/* 三項獨立細部調整 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
+          {/* 1. 字體大小 */}
+          <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3.5 space-y-2.5">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-300">
+              <TextAa size={15} className="text-sky-400" aria-hidden="true" />
+              <span>字體大小</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  { value: 'normal', label: '標準', sub: '100%' },
+                  { value: 'large', label: '放大', sub: '119%' },
+                  { value: 'xlarge', label: '特大', sub: '131%' },
+                ] satisfies { value: ReadingScale; label: string; sub: string }[]
+              ).map((opt) => {
+                const active = displayPrefs.scale === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onChangeDisplayPrefs({ ...displayPrefs, scale: opt.value })}
+                    aria-pressed={active}
+                    className={`px-2 py-2 rounded-lg text-xs font-medium border transition-colors text-center ${
+                      active
+                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                        : 'bg-slate-800/70 text-slate-300 border-slate-700 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div>{opt.label}</div>
+                    <div className="text-[11px] font-mono text-slate-400">{opt.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. 介面配色 */}
+          <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3.5 space-y-2.5">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-300">
+              <Sun size={15} className="text-amber-400" aria-hidden="true" />
+              <span>介面配色</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => onChangeDisplayPrefs({ ...displayPrefs, theme: 'dark' })}
+                aria-pressed={displayPrefs.theme === 'dark'}
+                className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
+                  displayPrefs.theme === 'dark'
+                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700 hover:bg-slate-800'
+                }`}
+              >
+                <Moon size={14} weight="fill" aria-hidden="true" />
+                <span>深色夜間</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangeDisplayPrefs({ ...displayPrefs, theme: 'light' })}
+                aria-pressed={displayPrefs.theme === 'light'}
+                className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
+                  displayPrefs.theme === 'light'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700 hover:bg-slate-800'
+                }`}
+              >
+                <Sun size={14} weight="fill" aria-hidden="true" />
+                <span>護眼暖白</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3. 閱讀強化開關 */}
+          <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3.5 space-y-2.5 flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300">
+                <CircleHalf size={15} className="text-emerald-400" aria-hidden="true" />
+                <span>閱讀強化</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={displayPrefs.highContrast}
+                onClick={() =>
+                  onChangeDisplayPrefs({
+                    ...displayPrefs,
+                    highContrast: !displayPrefs.highContrast,
+                  })
+                }
+                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                  displayPrefs.highContrast
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-slate-800 text-slate-300 border-slate-700'
+                }`}
+              >
+                {displayPrefs.highContrast ? '已開啟' : '已關閉'}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              高對比文字、較寬行距、表格隔行底色防串行與加大表單點擊區
+            </p>
+          </div>
+        </div>
+
+        {/* 即時視覺預覽條 */}
+        <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3.5 space-y-2">
+          <div className="text-[11px] text-slate-400">即時顯示預覽（紅漲綠跌與數字辨識度）</div>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-mono tabular-nums">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-sky-300">2330</span>
+              <span className="font-sans font-medium text-slate-100">台積電</span>
+              <span className="text-slate-400">· 現價 1,050 · 未實現</span>
+              <span className="font-semibold text-rose-400">+NT$ 18,500 (+4.25%)</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-sky-300">0056</span>
+              <span className="font-sans font-medium text-slate-100">元大高股息</span>
+              <span className="font-semibold text-emerald-400">-NT$ 1,240 (-0.82%)</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* 本機資料備份與還原 */}
       <section className="rounded-xl border border-slate-800 bg-[#0B1120] p-5 space-y-4">

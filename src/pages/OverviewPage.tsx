@@ -18,6 +18,7 @@ import type {
   OpenShortPosition,
   XirrResult,
 } from '@/engine/types';
+import type { DisplayPrefs } from '@/lib/displayPrefs';
 import {
   formatPct,
   formatPrice,
@@ -31,6 +32,7 @@ interface OverviewPageProps {
   analytics: LedgerAnalytics;
   xirr: XirrResult;
   hasTransactions: boolean;
+  displayPrefs: DisplayPrefs;
   onOpenNewTrade: (mode?: 'single' | 'pair') => void;
   onCoverShort: (pos: OpenShortPosition) => void;
   onNavigateTab: (tab: NavTab) => void;
@@ -41,6 +43,7 @@ export function OverviewPage({
   analytics,
   xirr,
   hasTransactions,
+  displayPrefs,
   onOpenNewTrade,
   onCoverShort,
   onNavigateTab,
@@ -371,6 +374,7 @@ export function OverviewPage({
       <DashboardCharts
         analytics={analytics}
         hasPricedHoldings={totals.pricedHoldingsCount > 0}
+        displayPrefs={displayPrefs}
       />
 
       {/* 最近已實現損益 & 費稅統計 */}

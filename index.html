@@ -13,6 +13,25 @@
       href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      try {
+        var raw = localStorage.getItem('tw-invest-ledger:display-prefs:v1');
+        var parsed = raw ? JSON.parse(raw) : {};
+        var scale =
+          parsed.scale === 'large' || parsed.scale === 'xlarge' ? parsed.scale : 'normal';
+        var theme = parsed.theme === 'light' ? 'light' : 'dark';
+        var highContrast = parsed.highContrast === true;
+        var root = document.documentElement;
+        root.dataset.readingScale = scale;
+        root.dataset.theme = theme;
+        root.dataset.highContrast = highContrast ? 'true' : 'false';
+        root.classList.toggle('dark', theme === 'dark');
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute('content', theme === 'light' ? '#F7F4EE' : '#020617');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body class="bg-[#020617] text-slate-50 antialiased selection:bg-sky-500/30 selection:text-sky-100">
     <div id="root"></div>

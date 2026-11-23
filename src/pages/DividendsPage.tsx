@@ -11,11 +11,13 @@ import {
 import { CalendarCheck, CurrencyDollar, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
 import { deleteDividendRecord } from '@/db/schema';
 import type { DividendRecord, LedgerAnalytics, LedgerSummary } from '@/engine/types';
+import { getChartThemeConfig, type DisplayPrefs } from '@/lib/displayPrefs';
 import { assetTypeLabel, formatShares, formatTwd } from '@/lib/format';
 
 interface DividendsPageProps {
   summary: LedgerSummary;
   analytics: LedgerAnalytics;
+  displayPrefs: DisplayPrefs;
   onAddDividend: () => void;
   onEditDividend: (record: DividendRecord) => void;
 }
@@ -23,11 +25,13 @@ interface DividendsPageProps {
 export function DividendsPage({
   summary,
   analytics,
+  displayPrefs,
   onAddDividend,
   onEditDividend,
 }: DividendsPageProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { dividendAnalytics } = analytics;
+  const chartTheme = getChartThemeConfig(displayPrefs);
 
   const handleDelete = async (id: string) => {
     await deleteDividendRecord(id);
@@ -110,40 +114,43 @@ export function DividendsPage({
               尚無配息紀錄，點擊右上「新增配息紀錄」後將繪製月配息現金流圖
             </div>
           ) : (
-            <div className="h-56 w-full">
+            <div className={`${chartTheme.compactHeightClass} w-full`}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={dividendAnalytics.monthlyDividends}
                   margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                 >
-                  <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid stroke={chartTheme.gridStroke} strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="month"
-                    tick={{ fill: '#94A3B8', fontSize: 11 }}
-                    axisLine={{ stroke: '#334155' }}
+                    tick={{ fill: chartTheme.tickFill, fontSize: chartTheme.tickFontSize }}
+                    axisLine={{ stroke: chartTheme.axisStroke }}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: '#94A3B8', fontSize: 11 }}
+                    tick={{ fill: chartTheme.tickFill, fontSize: chartTheme.tickFontSize }}
                     axisLine={false}
                     tickLine={false}
-                    width={62}
+                    width={chartTheme.yAxisWidth}
                     tickFormatter={(v: number) =>
                       Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
                     }
                   />
                   <Tooltip
                     formatter={(val) => [formatTwd(Number(val ?? 0)), '實領淨額']}
+                    cursor={{ fill: chartTheme.cursorFill }}
                     contentStyle={{
-                      backgroundColor: '#020617',
-                      borderColor: '#334155',
+                      backgroundColor: chartTheme.tooltipBg,
+                      borderColor: chartTheme.tooltipBorder,
                       borderRadius: '0.75rem',
-                      fontSize: '12px',
+                      fontSize: chartTheme.tooltipFontSize,
+                      color: chartTheme.tooltipText,
                     }}
+                    itemStyle={{ color: chartTheme.tooltipText }}
                   />
                   <Bar
                     dataKey="netAmount"
-                    fill="#10B981"
+                    fill={chartTheme.barColors.dividend}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={42}
                   />
