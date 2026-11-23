@@ -1,6 +1,23 @@
 import { upsertPriceQuotes } from '@/db/schema';
 import type { Market, PriceQuote } from '@/engine/types';
 
+export const AUTO_SYNC_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * 判斷網頁開啟時是否需要自動更新報價：
+ * 若從未更新、時間格式無效，或上次更新時間早於目前時間 5 分鐘以上，回傳 true。
+ */
+export function shouldAutoSyncQuotes(
+  lastQuoteSyncAt: string | null | undefined,
+  nowMs: number = Date.now(),
+  thresholdMs: number = AUTO_SYNC_STALE_MS,
+): boolean {
+  if (!lastQuoteSyncAt) return true;
+  const lastMs = Date.parse(lastQuoteSyncAt);
+  if (Number.isNaN(lastMs)) return true;
+  return nowMs - lastMs > thresholdMs;
+}
+
 interface QuotesApiRawResponse {
   ok: boolean;
   quotes?: Record<string, PriceQuote>;

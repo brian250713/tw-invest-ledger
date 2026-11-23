@@ -4,6 +4,7 @@ import {
   ArrowsLeftRight,
   Calculator,
   ChartPieSlice,
+  Clock,
   CurrencyDollar,
   DownloadSimple,
   FloppyDiskBack,
@@ -13,6 +14,7 @@ import {
   Stack,
   WarningCircle,
 } from '@phosphor-icons/react';
+import { formatQuoteSyncTime } from '@/lib/format';
 
 export type NavTab =
   | 'overview'
@@ -172,6 +174,28 @@ export function AppShell({
                   <span>備份</span>
                 </button>
               )}
+              <span
+                className={`${
+                  lastQuoteSyncAt ? 'inline-flex' : 'hidden sm:inline-flex'
+                } items-center gap-1 text-xs text-slate-400 whitespace-nowrap tabular-nums`}
+                title={
+                  lastQuoteSyncAt
+                    ? `報價上次更新時間：${new Date(lastQuoteSyncAt).toLocaleString('zh-TW')}`
+                    : '尚未同步公開報價'
+                }
+              >
+                <Clock size={13} className="text-slate-500 shrink-0" aria-hidden="true" />
+                {lastQuoteSyncAt ? (
+                  <>
+                    <span className="hidden md:inline">上次更新</span>
+                    <span className="font-mono text-slate-300">
+                      {formatQuoteSyncTime(lastQuoteSyncAt)}
+                    </span>
+                  </>
+                ) : (
+                  <span>尚未更新</span>
+                )}
+              </span>
               <button
                 type="button"
                 onClick={onSyncQuotes}

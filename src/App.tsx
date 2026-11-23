@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CheckCircle, WarningCircle, X } from '@phosphor-icons/react';
 import { AppShell, type NavTab } from '@/components/AppShell';
@@ -13,18 +13,39 @@ import {
   writeBackupToHandle,
   type SavedFileHandleState,
 } from '@/db/fileSync';
-import { db, DEFAULT_ACCOUNT_META_KEY, ensureInitialData, resolveDefaultAccountId } from '@/db/schema';
+import {
+  db,
+  DEFAULT_ACCOUNT_META_KEY,
+  ensureInitialData,
+  resolveDefaultAccountId,
+  type AppMetaEntry,
+} from '@/db/schema';
 import { buildLedgerAnalytics } from '@/engine/analytics';
 import { replayLedger } from '@/engine/replay';
 import { computePortfolioXirr } from '@/engine/xirr';
-import type { DividendRecord, Market, OpenShortPosition, Transaction } from '@/engine/types';
-import { syncMarketQuotes } from '@/lib/quotes';
+import type {
+  Account,
+  DividendRecord,
+  Market,
+  OpenShortPosition,
+  PriceQuote,
+  Security,
+  Transaction,
+} from '@/engine/types';
+import { shouldAutoSyncQuotes, syncMarketQuotes } from '@/lib/quotes';
 import { CalculatorPage } from '@/pages/CalculatorPage';
 import { DividendsPage } from '@/pages/DividendsPage';
 import { HoldingsPage } from '@/pages/HoldingsPage';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TransactionsPage } from '@/pages/TransactionsPage';
+
+const EMPTY_ACCOUNTS: Account[] = [];
+const EMPTY_SECURITIES: Security[] = [];
+const EMPTY_TRANSACTIONS: Transaction[] = [];
+const EMPTY_DIVIDENDS: DividendRecord[] = [];
+const EMPTY_PRICE_QUOTES: PriceQuote[] = [];
+const EMPTY_META_ROWS: AppMetaEntry[] = [];
 
 export function App() {
   const [ready, setReady] = useState(false);
@@ -43,6 +64,8 @@ export function App() {
     handle: null,
   });
   const lastAutoSyncedModifiedRef = useRef<string | null>(null);
+  const isSyncingQuotesRef = useRef(false);
+  const hasCheckedAutoSyncRef = useRef(false);
 
   useEffect(() => {
     void ensureInitialData().then(async () => {
@@ -52,12 +75,28 @@ export function App() {
     });
   }, []);
 
-  const accounts = useLiveQuery(() => db.accounts.orderBy('createdAt').toArray(), [], []);
-  const securities = useLiveQuery(() => db.securities.orderBy('symbol').toArray(), [], []);
-  const transactions = useLiveQuery(() => db.transactions.toArray(), [], []);
-  const dividends = useLiveQuery(() => db.dividends.toArray(), [], []);
-  const priceQuotes = useLiveQuery(() => db.priceQuotes.toArray(), [], []);
-  const metaRows = useLiveQuery(() => db.appMeta.toArray(), [], []);
+  const accountsQuery = useLiveQuery(() => db.accounts.orderBy('createdAt').toArray(), []);
+  const securitiesQuery = useLiveQuery(() => db.securities.orderBy('symbol').toArray(), []);
+  const transactionsQuery = useLiveQuery(() => db.transactions.toArray(), []);
+  const dividendsQuery = useLiveQuery(() => db.dividends.toArray(), []);
+  const priceQuotesQuery = useLiveQuery(() => db.priceQuotes.toArray(), []);
+  const metaRowsQuery = useLiveQuery(() => db.appMeta.toArray(), []);
+
+  const dataLoaded =
+    ready &&
+    accountsQuery !== undefined &&
+    securitiesQuery !== undefined &&
+    transactionsQuery !== undefined &&
+    dividendsQuery !== undefined &&
+    priceQuotesQuery !== undefined &&
+    metaRowsQuery !== undefined;
+
+  const accounts = accountsQuery ?? EMPTY_ACCOUNTS;
+  const securities = securitiesQuery ?? EMPTY_SECURITIES;
+  const transactions = transactionsQuery ?? EMPTY_TRANSACTIONS;
+  const dividends = dividendsQuery ?? EMPTY_DIVIDENDS;
+  const priceQuotes = priceQuotesQuery ?? EMPTY_PRICE_QUOTES;
+  const metaRows = metaRowsQuery ?? EMPTY_META_ROWS;
 
   const metaMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -133,37 +172,53 @@ export function App() {
     return Array.from(itemsMap.entries()).map(([symbol, market]) => ({ symbol, market }));
   }, [summary.aggregatedHoldings, summary.openShortPositions, securities]);
 
-  const handleSyncQuotes = async (forceRefresh = true) => {
-    if (quoteTargetItems.length === 0 || isSyncingQuotes) return;
-    setIsSyncingQuotes(true);
-    setSyncNotice(null);
-    try {
-      const res = await syncMarketQuotes(quoteTargetItems, { forceRefresh });
-      if (res.errorCount > 0 && res.updatedCount === 0) {
+  const handleSyncQuotes = useCallback(
+    async (forceRefresh = true) => {
+      if (quoteTargetItems.length === 0 || isSyncingQuotesRef.current) return;
+      isSyncingQuotesRef.current = true;
+      setIsSyncingQuotes(true);
+      setSyncNotice(null);
+      try {
+        const res = await syncMarketQuotes(quoteTargetItems, { forceRefresh });
+        if (res.errorCount > 0 && res.updatedCount === 0) {
+          setSyncNotice({
+            type: 'err',
+            text: `報價更新失敗（${res.errorCount} 檔未能取得公開行情，仍可於持倉列表手動填寫現價）`,
+          });
+        } else if (res.errorCount > 0) {
+          setSyncNotice({
+            type: 'ok',
+            text: `已更新 ${res.updatedCount} 檔公開報價，另有 ${res.errorCount} 檔查無行情`,
+          });
+        } else {
+          setSyncNotice({
+            type: 'ok',
+            text: `已同步 ${res.updatedCount} 檔最新公開報價${res.cached ? '（快取）' : ''}`,
+          });
+        }
+      } catch (err) {
         setSyncNotice({
           type: 'err',
-          text: `報價更新失敗（${res.errorCount} 檔未能取得公開行情，仍可於持倉列表手動填寫現價）`,
+          text: err instanceof Error ? err.message : '報價連線失敗',
         });
-      } else if (res.errorCount > 0) {
-        setSyncNotice({
-          type: 'ok',
-          text: `已更新 ${res.updatedCount} 檔公開報價，另有 ${res.errorCount} 檔查無行情`,
-        });
-      } else {
-        setSyncNotice({
-          type: 'ok',
-          text: `已同步 ${res.updatedCount} 檔最新公開報價${res.cached ? '（快取）' : ''}`,
-        });
+      } finally {
+        isSyncingQuotesRef.current = false;
+        setIsSyncingQuotes(false);
       }
-    } catch (err) {
-      setSyncNotice({
-        type: 'err',
-        text: err instanceof Error ? err.message : '報價連線失敗',
-      });
-    } finally {
-      setIsSyncingQuotes(false);
-    }
-  };
+    },
+    [quoteTargetItems],
+  );
+
+  // 網頁開啟且本機資料載入完成時，若上次更新時間早於目前時間 5 分鐘（或從未更新），自動更新報價
+  useEffect(() => {
+    if (!dataLoaded || hasCheckedAutoSyncRef.current) return;
+    hasCheckedAutoSyncRef.current = true;
+
+    if (quoteTargetItems.length === 0) return;
+    if (!shouldAutoSyncQuotes(lastQuoteSyncAt)) return;
+
+    void handleSyncQuotes(false);
+  }, [dataLoaded, quoteTargetItems.length, lastQuoteSyncAt, handleSyncQuotes]);
 
   const handleOpenNewTrade = (mode: 'single' | 'pair' = 'single', defaultSymbol?: string) => {
     setModalState({ mode, defaultSymbol });

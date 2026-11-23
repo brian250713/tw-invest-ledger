@@ -32,6 +32,28 @@ export function formatPct(pct: number, showSign = true): string {
 }
 
 /**
+ * 格式化報價上次更新時間：當日顯示 HH:mm，非當日顯示 MM/DD HH:mm。
+ */
+export function formatQuoteSyncTime(isoString: string | null, now: Date = new Date()): string {
+  if (!isoString) return '尚未更新';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '尚未更新';
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const hh = pad(date.getHours());
+  const mm = pad(date.getMinutes());
+  const isSameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  if (isSameDay) {
+    return `${hh}:${mm}`;
+  }
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${hh}:${mm}`;
+}
+
+/**
  * 台股慣例紅漲綠跌：正報酬為 rose，負報酬為 emerald。
  */
 export function pnlColorClass(value: number): string {
