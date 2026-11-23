@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   ArrowsClockwise,
   ArrowsLeftRight,
+  Calculator,
   ChartPieSlice,
   CurrencyDollar,
   DownloadSimple,
@@ -13,7 +14,13 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 
-export type NavTab = 'overview' | 'holdings' | 'transactions' | 'dividends' | 'settings';
+export type NavTab =
+  | 'overview'
+  | 'holdings'
+  | 'transactions'
+  | 'dividends'
+  | 'calculator'
+  | 'settings';
 
 interface AppShellProps {
   activeTab: NavTab;
@@ -36,6 +43,7 @@ const NAV_ITEMS: { id: NavTab; label: string; shortLabel: string; icon: typeof C
   { id: 'holdings', label: '庫存持倉', shortLabel: '持倉', icon: Stack },
   { id: 'transactions', label: '交易/當沖', shortLabel: '交易', icon: ArrowsLeftRight },
   { id: 'dividends', label: '配息現金流', shortLabel: '配息', icon: CurrencyDollar },
+  { id: 'calculator', label: '回補損平試算', shortLabel: '試算', icon: Calculator },
   { id: 'settings', label: '設定與備份', shortLabel: '設定', icon: GearSix },
 ];
 
@@ -204,7 +212,7 @@ export function AppShell({
         className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-800 bg-[#0B1120]/95 backdrop-blur-md"
         aria-label="手機導航"
       >
-        <div className="grid grid-cols-5">
+        <div className="grid grid-cols-6">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = activeTab === item.id;
@@ -220,7 +228,7 @@ export function AppShell({
                 <Icon size={20} weight={active ? 'fill' : 'regular'} aria-hidden="true" />
                 <span className="mt-1">{item.shortLabel}</span>
                 {item.id === 'overview' && openShortCount > 0 && (
-                  <span className="absolute top-1.5 right-4 h-2 w-2 rounded-full bg-amber-400" />
+                  <span className="absolute top-1.5 right-2.5 h-2 w-2 rounded-full bg-amber-400" />
                 )}
               </button>
             );

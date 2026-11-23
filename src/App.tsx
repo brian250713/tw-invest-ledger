@@ -19,6 +19,7 @@ import { replayLedger } from '@/engine/replay';
 import { computePortfolioXirr } from '@/engine/xirr';
 import type { DividendRecord, Market, OpenShortPosition, Transaction } from '@/engine/types';
 import { syncMarketQuotes } from '@/lib/quotes';
+import { CalculatorPage } from '@/pages/CalculatorPage';
 import { DividendsPage } from '@/pages/DividendsPage';
 import { HoldingsPage } from '@/pages/HoldingsPage';
 import { OverviewPage } from '@/pages/OverviewPage';
@@ -266,9 +267,6 @@ export function App() {
             summary={summary}
             analytics={analytics}
             xirr={xirr}
-            accounts={accounts}
-            defaultAccountId={defaultAccountId}
-            securities={securities}
             hasTransactions={transactions.length > 0}
             onOpenNewTrade={(mode) => handleOpenNewTrade(mode)}
             onCoverShort={handleCoverShort}
@@ -306,6 +304,15 @@ export function App() {
               setEditingDividend(record);
               setDividendModalOpen(true);
             }}
+          />
+        )}
+
+        {activeTab === 'calculator' && (
+          <CalculatorPage
+            accounts={accounts}
+            defaultAccountId={defaultAccountId}
+            securities={securities}
+            onOpenNewTrade={(mode) => handleOpenNewTrade(mode)}
           />
         )}
 

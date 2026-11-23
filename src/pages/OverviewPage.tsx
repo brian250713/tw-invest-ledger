@@ -8,16 +8,14 @@ import {
   Sparkle,
   Warning,
 } from '@phosphor-icons/react';
-import { BreakevenCalculator } from '@/components/BreakevenCalculator';
+import type { NavTab } from '@/components/AppShell';
 import { DashboardCharts } from '@/components/DashboardCharts';
 import { loadDemoData } from '@/db/backup';
 import { convertPendingToGeneralSell } from '@/db/schema';
 import type {
-  Account,
   LedgerAnalytics,
   LedgerSummary,
   OpenShortPosition,
-  Security,
   XirrResult,
 } from '@/engine/types';
 import {
@@ -32,22 +30,16 @@ interface OverviewPageProps {
   summary: LedgerSummary;
   analytics: LedgerAnalytics;
   xirr: XirrResult;
-  accounts: Account[];
-  defaultAccountId?: string;
-  securities: Security[];
   hasTransactions: boolean;
   onOpenNewTrade: (mode?: 'single' | 'pair') => void;
   onCoverShort: (pos: OpenShortPosition) => void;
-  onNavigateTab: (tab: 'holdings' | 'transactions' | 'dividends' | 'settings') => void;
+  onNavigateTab: (tab: NavTab) => void;
 }
 
 export function OverviewPage({
   summary,
   analytics,
   xirr,
-  accounts,
-  defaultAccountId,
-  securities,
   hasTransactions,
   onOpenNewTrade,
   onCoverShort,
@@ -379,13 +371,6 @@ export function OverviewPage({
       <DashboardCharts
         analytics={analytics}
         hasPricedHoldings={totals.pricedHoldingsCount > 0}
-      />
-
-      {/* 回補損平試算器 */}
-      <BreakevenCalculator
-        accounts={accounts}
-        defaultAccountId={defaultAccountId}
-        securities={securities}
       />
 
       {/* 最近已實現損益 & 費稅統計 */}

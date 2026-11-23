@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tw-invest-ledger-v1';
+const CACHE_NAME = 'tw-invest-ledger-v2';
 const APP_SHELL_URLS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

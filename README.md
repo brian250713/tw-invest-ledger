@@ -86,7 +86,7 @@ pnpm run deploy
 │   ├── db/                 # Dexie IndexedDB schema、JSON 備份、本機檔案同步、CSV 解析匯出
 │   ├── data/               # 內建台股與 ETF 字典 (tw-securities.json)
 │   ├── components/         # 記帳視窗、損平試算器、Recharts 圖表、持倉詳情抽屜
-│   ├── pages/              # 總覽、庫存持倉、交易/當沖、配息現金流、設定與備份
+│   ├── pages/              # 總覽、庫存持倉、交易/當沖、配息現金流、回補損平試算、設定與備份
 │   └── lib/                # 台股金額/紅漲綠跌格式化與報價同步 client
 └── wrangler.jsonc          # Cloudflare Workers 設定
 ```
