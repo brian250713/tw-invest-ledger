@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Decimal from 'decimal.js';
 import { MagnifyingGlass, Plus, X } from '@phosphor-icons/react';
 import {
@@ -111,12 +111,18 @@ export function TradeModal({
   const [pairNote, setPairNote] = useState<string>('');
 
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [successMsg, setSuccessMsg] = useState<string>('');
+  const [continuousCount, setContinuousCount] = useState<number>(0);
   const [saving, setSaving] = useState<boolean>(false);
+  const priceInputRef = useRef<HTMLInputElement>(null);
+  const pairSellPriceInputRef = useRef<HTMLInputElement>(null);
 
   // 初始化狀態
   useEffect(() => {
     if (!isOpen) return;
     setErrorMsg('');
+    setSuccessMsg('');
+    setContinuousCount(0);
     setShowNewSecForm(false);
 
     const editing = initialState?.editingTx;
@@ -416,9 +422,16 @@ export function TradeModal({
     setErrorMsg('');
   };
 
+  const isContinueSubmit = (e: React.FormEvent) => {
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    return submitter?.value === 'continue';
+  };
+
   const handleSaveSingle = async (e: React.FormEvent) => {
     e.preventDefault();
+    const keepOpen = isContinueSubmit(e) && !initialState?.editingTx && !initialState?.coverPreset;
     setErrorMsg('');
+    setSuccessMsg('');
 
     const p = Number(price);
     const qty = Number(lotsOrShares);
@@ -475,7 +488,23 @@ export function TradeModal({
       } else {
         await addTransactionRecord(record);
       }
-      onClose();
+      if (keepOpen) {
+        const nextCount = continuousCount + 1;
+        setContinuousCount(nextCount);
+        setSuccessMsg(
+          `已新增第 ${nextCount} 筆：${symbol} ${side === 'BUY' ? '買進' : '賣出'} ${qty}${tradeType === 'LOT' ? ' 張' : ' 股'} @ ${p}`,
+        );
+        setPrice('');
+        setTradeTime('');
+        setFeeOverride('');
+        setTaxOverride('');
+        setNote('');
+        setPendingDayTrade(false);
+        setDayTradeGroupId(null);
+        requestAnimationFrame(() => priceInputRef.current?.focus());
+      } else {
+        onClose();
+      }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : '儲存失敗');
     } finally {
@@ -485,7 +514,9 @@ export function TradeModal({
 
   const handleSavePair = async (e: React.FormEvent) => {
     e.preventDefault();
+    const keepOpen = isContinueSubmit(e);
     setErrorMsg('');
+    setSuccessMsg('');
 
     const lots = Number(pairLots);
     const sp = Number(pairSellPrice);
@@ -562,7 +593,22 @@ export function TradeModal({
     setSaving(true);
     try {
       await addPairedTransactions(sellTx, buyTx);
-      onClose();
+      if (keepOpen) {
+        const nextCount = continuousCount + 1;
+        setContinuousCount(nextCount);
+        setSuccessMsg(
+          `已新增第 ${nextCount} 組先賣後買：${symbol} ${lots} 張 賣 ${sp} / 買 ${bp}`,
+        );
+        setPairSellPrice('');
+        setPairBuyPrice('');
+        setPairSellFeeOverride('');
+        setPairBuyFeeOverride('');
+        setPairTaxOverride('');
+        setPairNote('');
+        requestAnimationFrame(() => pairSellPriceInputRef.current?.focus());
+      } else {
+        onClose();
+      }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : '儲存失敗');
     } finally {
@@ -776,6 +822,15 @@ export function TradeModal({
             </div>
           )}
 
+          {successMsg && (
+            <div
+              className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300"
+              role="status"
+            >
+              {successMsg}
+            </div>
+          )}
+
           {tab === 'single' ? (
             <form onSubmit={handleSaveSingle} className="space-y-4">
               {/* 買賣與整零股 */}
@@ -889,6 +944,7 @@ export function TradeModal({
                 <label className="block space-y-1">
                   <span className="text-xs text-slate-300">成交單價</span>
                   <input
+                    ref={priceInputRef}
                     type="number"
                     min="0.01"
                     step="0.01"
@@ -1043,10 +1099,23 @@ export function TradeModal({
                   onClick={onClose}
                   className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200"
                 >
-                  取消
+                  {continuousCount > 0 ? '完成' : '取消'}
                 </button>
+                {!isEditing && !initialState?.coverPreset && (
+                  <button
+                    type="submit"
+                    name="intent"
+                    value="continue"
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold border border-sky-500/50 text-sky-300 hover:bg-sky-500/10 disabled:opacity-50"
+                  >
+                    儲存並繼續
+                  </button>
+                )}
                 <button
                   type="submit"
+                  name="intent"
+                  value="close"
                   disabled={saving}
                   className="px-5 py-2 rounded-lg text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-950 disabled:opacity-50"
                 >
@@ -1084,6 +1153,7 @@ export function TradeModal({
                 <label className="block space-y-1">
                   <span className="text-xs text-slate-300">先賣成交價</span>
                   <input
+                    ref={pairSellPriceInputRef}
                     type="number"
                     min="0.01"
                     step="0.01"
@@ -1247,10 +1317,21 @@ export function TradeModal({
                   onClick={onClose}
                   className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200"
                 >
-                  取消
+                  {continuousCount > 0 ? '完成' : '取消'}
                 </button>
                 <button
                   type="submit"
+                  name="intent"
+                  value="continue"
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-amber-500/50 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
+                >
+                  儲存並繼續
+                </button>
+                <button
+                  type="submit"
+                  name="intent"
+                  value="close"
                   disabled={saving}
                   className="px-5 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50"
                 >
